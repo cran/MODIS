@@ -1,10 +1,10 @@
 Package: MODIS
 Type: Package
 Title: Acquisition and Processing of MODIS Products
-Version: 1.0.0
-Date: 2016-12-16
+Version: 1.1.0
+Date: 2017-07-03
 Authors@R: c(
-	person("Matteo", "Mattiuzzi", role = c("cre", "aut"),  email = "matteo@mattiuzzi.com"),
+	person("Matteo", "Mattiuzzi", role = c("aut")),
 	person("Jan", "Verbesselt", role = "ctb"),
 	person("Tomislav", "Hengl", role = "ctb"),
 	person("Anja", "Klisch", role = "ctb"),
@@ -13,8 +13,7 @@ Authors@R: c(
 	person("Bradley", "Evans", role = "ctb"),
 	person("Agustin", "Lobo", role = "ctb"), 
 	person("Koen", "Hufkens", role = "ctb"),
-	person("Florian", "Detsch", role = "ctb"))
-Maintainer: Matteo Mattiuzzi <matteo@mattiuzzi.com>
+	person("Florian", "Detsch", role = c("cre", "aut"), email = "fdetsch@web.de"))
 Description: Download and processing functionalities for the Moderate Resolution
     Imaging Spectroradiometer (MODIS). The package provides automated access to the
     global online data archives (LPDAAC and LAADS) and processing capabilities such
@@ -22,14 +21,14 @@ Description: Download and processing functionalities for the Moderate Resolution
 License: GPL (>= 3) | file LICENSE
 LazyData: TRUE
 Depends: mapdata, R (>= 2.10), raster
-Imports: bitops, grDevices, graphics, maps, methods, parallel, ptw,
-        RCurl, rgdal, rgeos, sp, stats, utils, XML
+Imports: bitops, devtools, grDevices, graphics, mapedit, maps, methods,
+        parallel, ptw, RCurl, rgdal, sf, sp, stats, utils, XML
 URL: https://github.com/MatMatt/MODIS
 ByteCompile: TRUE
-RoxygenNote: 5.0.1
+RoxygenNote: 6.0.1
 NeedsCompilation: no
-Packaged: 2017-01-10 11:22:43 UTC; fdetsch
-Author: Matteo Mattiuzzi [cre, aut],
+Packaged: 2017-07-03 07:04:09 UTC; fdetsch
+Author: Matteo Mattiuzzi [aut],
   Jan Verbesselt [ctb],
   Tomislav Hengl [ctb],
   Anja Klisch [ctb],
@@ -38,6 +37,7 @@ Author: Matteo Mattiuzzi [cre, aut],
   Bradley Evans [ctb],
   Agustin Lobo [ctb],
   Koen Hufkens [ctb],
-  Florian Detsch [ctb]
+  Florian Detsch [cre, aut]
+Maintainer: Florian Detsch <fdetsch@web.de>
 Repository: CRAN
-Date/Publication: 2017-01-10 18:42:37
+Date/Publication: 2017-07-03 13:35:41 UTC
