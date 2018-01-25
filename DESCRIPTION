@@ -1,8 +1,8 @@
 Package: MODIS
 Type: Package
 Title: Acquisition and Processing of MODIS Products
-Version: 1.1.1
-Date: 2018-01-19
+Version: 1.1.2
+Date: 2018-01-22
 URL: https://github.com/MatMatt/MODIS
 BugReports: https://github.com/MatMatt/MODIS/issues
 Authors@R: c(
@@ -31,7 +31,7 @@ ByteCompile: TRUE
 RoxygenNote: 6.0.1
 Suggests: testthat
 NeedsCompilation: no
-Packaged: 2018-01-20 09:18:50 UTC; fdetsch
+Packaged: 2018-01-22 12:09:00 UTC; fdetsch
 Author: Matteo Mattiuzzi [aut],
   Jan Verbesselt [ctb],
   Tomislav Hengl [ctb],
@@ -44,4 +44,4 @@ Author: Matteo Mattiuzzi [aut],
   Florian Detsch [cre, aut]
 Maintainer: Florian Detsch <fdetsch@web.de>
 Repository: CRAN
-Date/Publication: 2018-01-20 15:30:56 UTC
+Date/Publication: 2018-01-25 15:59:20 UTC
