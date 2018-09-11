@@ -8,9 +8,12 @@ genString <- function(x, collection=NULL, date=NULL, what="images", local=TRUE, 
 {
   
   if (is.null(opts))
-    opts <- combineOptions(checkTools = FALSE, ...)
+    opts <- combineOptions(checkTools = FALSE, quiet = TRUE, ...)
   
   product <- getProduct(x=x,quiet=TRUE)
+  if (is.null(product)) {
+    stop("'x' must be a valid product listed in getProduct().")
+  }
 
   if(length(product$PRODUCT)>1)
   {
@@ -80,7 +83,7 @@ genString <- function(x, collection=NULL, date=NULL, what="images", local=TRUE, 
       {
         stringX <- MODIS_FTPinfo[[e]]
         
-        if(length(grep(product$SOURCE,pattern=stringX$name))>0 & what %in% stringX$content)
+        if(grepl(product$SOURCE,pattern=stringX$name) & what %in% stringX$content)
         {
           n=n+1                    
           if(is.null(stringX$variablepath))
@@ -168,7 +171,7 @@ genString <- function(x, collection=NULL, date=NULL, what="images", local=TRUE, 
       {
         stringX <- MODIS_FTPinfo[[e]]
         
-        if(length(grep(product$SOURCE,pattern=stringX$name))>0 & what %in% stringX$content)
+        if(grepl(product$SOURCE,pattern=stringX$name) & what %in% stringX$content)
         {
           struc <- stringX$variablepath    
           tempString <- strsplit(struc,"/")[[1]]

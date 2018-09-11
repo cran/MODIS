@@ -4,7 +4,7 @@
 \alias{getTile}
 \title{Get MODIS Tile ID(s)}
 \usage{
-getTile(x = NULL, tileH = NULL, tileV = NULL)
+getTile(x = NULL, tileH = NULL, tileV = NULL, ...)
 }
 \arguments{
 \item{x}{Extent information, see Details. Ignored if \code{tileH} and
@@ -15,6 +15,10 @@ vertical tile number(s) of the
 \href{https://nsidc.org/data/docs/daac/mod10_modis_snow/landgrid.html}{MODIS Sinusoidal grid}
 (e.g., \code{tileH = 1:5}). If specified, no cropping is performed and the 
 full tile(s) (if more than one then also mosaicked) is (are) processed!}
+
+\item{...}{Additional arguments passed to \code{\link{MODISoptions}}. Here, 
+only 'outProj' and 'pixelSize' are relevant, and this only if 'x' is an 
+object of class \code{character}, \code{map}, \code{Extent} or \code{bbox}.}
 }
 \value{
 A \code{MODISextent} object.
@@ -42,10 +46,10 @@ If \code{x} is of class (see Examples for use cases)
   \code{Raster*} comes with no valid CRS, 
   \href{http://spatialreference.org/ref/epsg/wgs-84/}{EPSG:4326} is assumed.\cr
   \cr
-  \code{Extent}:\cr
-  \tab Boundary coordinates from \code{Extent} objects are assumed to be in 
-  \href{http://spatialreference.org/ref/epsg/wgs-84/}{EPSG:4326} as well as 
-  such objects have no projection information attached.\cr
+  \code{Extent}, \code{bbox}:\cr
+  \tab Boundary coordinates from \code{Extent} and \code{bbox} objects are 
+  assumed to be in \href{http://spatialreference.org/ref/epsg/wgs-84/}{EPSG:4326} 
+  as such objects have no projection information attached.\cr
   \cr
   Other:\cr
   \tab \code{Spatial}, \code{sf}, or \code{map} object.
@@ -61,6 +65,7 @@ easy data access is granted through \code{\link{getData}}.
 # ex 1 ############
 # interactive tile selection
 getTile()
+}
 
 # ex 2: Spatial (taken from ?rgdal::readOGR) ############
 dsn <- system.file("vectors/Up.tab", package = "rgdal")[1]
@@ -68,8 +73,9 @@ Up <- rgdal::readOGR(dsn, "Up")
 getTile(Up)
 
 # ex 3: sf ############
-library(mapview)
-getTile(franconia)
+ifl <- system.file("shape/nc.shp", package = "sf")
+nc <- sf::st_read(ifl, quiet = TRUE)
+getTile(nc)
 
 # ex 4: tileH,tileV ############
 getTile(tileH = 18:19, tileV = 4)
@@ -82,11 +88,12 @@ getTile(rst1)
 rst3 <- projectExtent(rst1, crs = "+init=epsg:32633")
 getTile(rst3)
 
-# ex 6: Raster* without CRS or, alternatively, Extent -> treated as EPSG:4326 ############
+# ex 6: Raster* without CRS or, alternatively, Extent or bbox --> treated as EPSG:4326 ############
 mat2 <- matrix(seq(180 * 360), byrow = TRUE, ncol = 360)
-rst2 <- raster(mat2)
+rst2 <- raster(mat2, xmn = -180, xmx = 180, ymn = -90, ymx = 90)
 getTile(rst2)
 getTile(extent(rst1))
+getTile(sf::st_bbox(nc))
 
 # ex 7: map names as returned by search4map() ############
 getTile("Austria")
@@ -99,11 +106,11 @@ getTile(m1)
 # or use 'map' objects directly (remember to use map(..., fill = TRUE)): 
 m2 <- map("state", region = "new jersey", fill = TRUE)
 getTile(m2)
-}
 
 }
 \seealso{
-\code{\link{extent}}, \code{\link{map}}, \code{\link{search4map}}.
+\code{\link{extent}}, \code{\link[sf]{st_bbox}}, \code{\link{map}}, 
+\code{\link{search4map}}.
 }
 \author{
 Matteo Mattiuzzi, Florian Detsch

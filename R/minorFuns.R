@@ -21,11 +21,11 @@
 #' \code{\link{getTile}}, \code{\link{map}}, \code{\link{grep}}.
 #' 
 #' @examples 
-#' \dontrun{
+#' \donttest{
 #' search4map()
 #' 
 #' search4map(pattern="USA",plot=TRUE)
-#' search4map(database="state",plot=TRUE)?map
+#' search4map(database="state",plot=TRUE)
 #' 
 #' search4map(database="italy",pattern="Bolz",plot=TRUE)
 #' 
@@ -59,37 +59,38 @@ stubborn <- function(level = "high") {
 }
 
 
-checksizefun <- function(file,sizeInfo=NULL,flexB=0)
-{
-    # determine reference size
-    if (is.null(sizeInfo))
-    {
-        xmlfile  <- paste0(file,".xml")
-        xmlfile  <- xmlParse(xmlfile)
-        MetaSize <- getNodeSet(xmlfile, "/GranuleMetaDataFile/GranuleURMetaData/DataFiles/DataFileContainer/FileSize" )
-        MetaSize <- as.numeric(xmlValue(MetaSize[[1]])) # expected filesize
-    } else 
-    {
-        MetaSize <- as.numeric(sizeInfo[which(sizeInfo[,1]==basename(file)),2])
-    }
-    
-    if(length(MetaSize)==0)
-    {
-        res  <- list(MetaSize=NULL,FileSize=NULL,isOK=NULL)
-        return(res)
-    }
-    
-    FileSize <- as.numeric(fileSize(file))
-    if (flexB!=0)
-    {
-        isOK <- (MetaSize >= FileSize-flexB & MetaSize <= FileSize+flexB)
-    } else 
-    {
-        isOK <- (MetaSize == FileSize)
-    }
-    res  <- list(MetaSize=MetaSize,FileSize=FileSize,isOK=as.logical(isOK))
-return(res)
-}
+# ## seems to be deprecated or remnant from an early MODIS version
+# checksizefun <- function(file,sizeInfo=NULL,flexB=0)
+# {
+#     # determine reference size
+#     if (is.null(sizeInfo))
+#     {
+#         xmlfile  <- paste0(file,".xml")
+#         xmlfile  <- xmlParse(xmlfile)
+#         MetaSize <- getNodeSet(xmlfile, "/GranuleMetaDataFile/GranuleURMetaData/DataFiles/DataFileContainer/FileSize" )
+#         MetaSize <- as.numeric(xmlValue(MetaSize[[1]])) # expected filesize
+#     } else 
+#     {
+#         MetaSize <- as.numeric(sizeInfo[which(sizeInfo[,1]==basename(file)),2])
+#     }
+#     
+#     if(length(MetaSize)==0)
+#     {
+#         res  <- list(MetaSize=NULL,FileSize=NULL,isOK=NULL)
+#         return(res)
+#     }
+#     
+#     FileSize <- as.numeric(fileSize(file))
+#     if (flexB!=0)
+#     {
+#         isOK <- (MetaSize >= FileSize-flexB & MetaSize <= FileSize+flexB)
+#     } else 
+#     {
+#         isOK <- (MetaSize == FileSize)
+#     }
+#     res  <- list(MetaSize=MetaSize,FileSize=FileSize,isOK=as.logical(isOK))
+# return(res)
+# }
 
 
 #' @describeIn minorFuns Simplifies search for \strong{mapdata}-based extents
@@ -126,7 +127,8 @@ search4map <- function(pattern="",database='worldHires',plot=FALSE)
   }
 }
 
-checkTools <- function(tool=c("MRT","GDAL"), quiet=FALSE, opts = NULL)
+checkTools <- function(tool = c("MRT", "GDAL", "wget", "curl"), quiet = FALSE
+                       , opts = NULL)
 {
     tool <- toupper(tool)
     
@@ -134,9 +136,8 @@ checkTools <- function(tool=c("MRT","GDAL"), quiet=FALSE, opts = NULL)
     options(warn=-1)
     on.exit(options(warn=iw))
     
-    MRT  <- NULL
-    GDAL <- NULL
-    
+    MRT  <- GDAL <- WGET <- CURL <- NULL
+
     if ("MRT" %in% tool)
     {
         MRT   <- FALSE
@@ -235,9 +236,11 @@ checkTools <- function(tool=c("MRT","GDAL"), quiet=FALSE, opts = NULL)
             
             cmd <- paste0(opts$gdalPath,'gdalinfo --version')            
             
-            gdaltext <- shell(cmd,intern=TRUE)
+            gdalcode <- system(cmd, intern = FALSE
+                               , show.output.on.console = FALSE
+                               , ignore.stdout = TRUE, ignore.stderr = TRUE)
             
-            if (length(grep(x=gdaltext,pattern="GDAL",ignore.case = TRUE))==0)
+            if (gdalcode > 0)
             {
                 cat("'FWTools/OSGeo4W' installation not found or path not set.\nIf you don't have installed one of them you can get it from 'http://fwtools.maptools.org/' or 'http://trac.osgeo.org/osgeo4w/' (recommanded)\nTrying to autodetect path to 'FWTools/OSGeo4W' (this may takes some time, you can interupt this process and set it manually, see 'gdalPath' argument in '?MODISoptions':\n\n")
                 
@@ -289,6 +292,8 @@ checkTools <- function(tool=c("MRT","GDAL"), quiet=FALSE, opts = NULL)
 
             } else 
             {
+              gdaltext = system(cmd, intern = TRUE)
+              
                 if (!quiet)
                 {
                     cat("   OK,",gdaltext,"found!\n")
@@ -302,18 +307,55 @@ checkTools <- function(tool=c("MRT","GDAL"), quiet=FALSE, opts = NULL)
             GDAL <- list(GDAL = GDAL, version = gdaltext,vercheck=gdv)
         }
     }
-    return(invisible(list(GDAL=GDAL,MRT=MRT)))        
+
+        
+    ### wget ----
+    
+    if (any(grepl("wget", tool, ignore.case = TRUE))) {
+      
+      WGET = FALSE
+      wgetOK = try(system("wget --version", intern = TRUE), silent = TRUE)
+      
+      wgettext = if (!inherits(wgetOK, "try-error")) {
+        WGET = TRUE
+        regmatches(wgetOK[1], regexpr("GNU Wget [[:digit:]\\.]+", wgetOK[1]))
+      } else ""
+      
+      WGET = list(WGET = WGET, version = wgettext)
+    }
+    
+    
+    ### curl ----
+    
+    if (any(grepl("curl", tool, ignore.case = TRUE))) {
+      
+      CURL = FALSE
+      curlOK = try(system("curl --version", intern = TRUE), silent = TRUE)
+      
+      curltext = if (!inherits(curlOK, "try-error")) {
+        CURL = TRUE
+        regmatches(curlOK[1], regexpr("curl [[:digit:]\\.]+", curlOK[1]))
+      } else ""
+      
+      CURL = list(CURL = CURL, version = curltext)
+    }
+    
+    
+    return(invisible(list(GDAL = GDAL
+                          , MRT = MRT
+                          , WGET = WGET
+                          , CURL = CURL)))        
 }
 
 
 # get gdal write formats (driver 'name', 'long name' and 'extension')
-gdalWriteDriver <- function(renew = FALSE, quiet = TRUE,...)
+gdalWriteDriver <- function(renew = FALSE, ...)
 {
   iw   <- options()$warn 
   options(warn=-1)
   on.exit(options(warn=iw))
 
-  opt <- combineOptions(...)
+  opt <- combineOptions(checkTools = FALSE, ...)
      
   outfile <- paste0(opt$outDirPath,".auxiliaries/gdalOutDriver.RData")
   
@@ -338,7 +380,7 @@ gdalWriteDriver <- function(renew = FALSE, quiet = TRUE,...)
 
   if (renew)
   {
-    if(!quiet)
+    if(!opt$quiet)
     {
       message("Detecting available write drivers!")
     }
@@ -362,9 +404,10 @@ gdalWriteDriver <- function(renew = FALSE, quiet = TRUE,...)
     
     description <- as.character(sapply(gdalOutDriver,function(x){strsplit(x,"\\): ")[[1]][2]}))
     
-    if(!quiet)
+    if(!opt$quiet)
     {
-      message("Found: ",length(name)," candidate drivers, detecting file extensions...")
+      message("Found ",length(name)
+              , " candidate drivers, detecting file extensions (this might take some time...)")
     }
     
     extension <- rep(NA,length(name))
@@ -377,7 +420,7 @@ gdalWriteDriver <- function(renew = FALSE, quiet = TRUE,...)
         extension[i] <- getExtension(name[ind],gdalPath = opt$gdalPath)
       }
     }
-    if(!quiet)
+    if(!opt$quiet)
     {
       message(sum(!is.na(extension))," usable drivers detected!")
     }
@@ -563,37 +606,42 @@ filesUrl <- function(url)
     options(warn=-1)
     on.exit(options(warn=iw))
 
-    ## default method (e.g. LPDAAC, LAADS)
-    if (length(grep("ntsg", url)) == 0) {
-      
-      co <- try(RCurl::getURL(url, ftp.use.epsv = FALSE), silent = TRUE)
-      
-      if (inherits(co, "try-error")) return(FALSE)
-      
-      if (substring(url,1,4)=="http")
-      {
-        co     <- XML::htmlTreeParse(co)
-        co     <- co$children[[1]][[2]][[2]]
-        co     <- sapply(co$children, function(el) XML::xmlGetAttr(el, "href"))
-        co     <- as.character(unlist(co))
-        co     <- co[!co %in% c("?C=N;O=D", "?C=M;O=A", "?C=S;O=A", "?C=D;O=A")]
-        fnames <- co[-1] 
-        
-      } else 
-      {
-        co <- strsplit(co, if(.Platform$OS.type=="unix"){"\n"} else{"\r\n"})[[1]]
-        
-        co   <- strsplit(co," ")
-        elim <- grep(co,pattern="total")
-        if(length(elim)==1)
-        {
-          co <- co[-elim]
-        }
-        fnames <- basename(sapply(co,function(x){x[length(x)]}))
+    ## LP DAAC, NSIDC
+    if (grepl("usgs.gov|nsidc", url)) 
+    {
+      h <- curl::new_handle()
+      if (grepl("nsidc", url)) {
+        curl::handle_setopt(
+          handle = h,
+          httpauth = 1,
+          userpwd = paste0(credentials()$login, ":",credentials()$password)
+        )
       }
       
+      # read online content
+      con = curl::curl(url, handle = h)
+      on.exit(try(close(con), silent = TRUE))
+      co = readLines(con)
+      close(con)
+      
+      # extract '<a href=...> nodes
+      pttrn = '<a href=\"[[:graph:]]{1,}\">[[:graph:]]{1,}</a>'
+      tmp = sapply(co, function(i) {
+        regmatches(i, regexpr(pttrn, i))
+      })
+      
+      spl1 = sapply(strsplit(unlist(tmp), ">"), "[[", 2)
+      fnames = as.character(sapply(strsplit(spl1, "<"), "[[", 1))
+
+    ## LAADS  
+    } else if (grepl("nasa", url)) {
+      
+      url = gsub("/$", "", url)
+      tmp = utils::read.csv(paste0(url, ".csv"), colClasses = "character")
+      fnames = tmp$name[grep("[^NOTICE]", tmp$name)]
+      
     ## NTSG method; if not used, connection breakdowns are likely to occur  
-    } else {
+    } else if (grepl("ntsg", url)) {
       
       # 'MODIS' options
       opts <- combineOptions()
@@ -622,6 +670,7 @@ filesUrl <- function(url)
 
       # remove temporary file and return output
       invisible(file.remove(file_out))
+      
     }
 
     ## format and return    
@@ -647,6 +696,10 @@ ModisFileDownloader <- function(x, opts = NULL, ...)
 {
     x <- basename(x)
 
+    # earthdata login credentials (here for simplicity)
+    usr = credentials()$login
+    pwd = credentials()$password
+    
     ## if options have not been passed down, create them from '...'
     if (is.null(opts))
       opts <- combineOptions(...)
@@ -662,7 +715,7 @@ ModisFileDownloader <- function(x, opts = NULL, ...)
     
     for (a in seq_along(x))
     {  # a=1
-        path <- genString(x[a], opts = opts)
+        path <- genString(x[a], collection = getCollection(x[a], quiet = TRUE), opts = opts)
         path$localPath <- setPath(path$localPath)
         
         hv <- seq_along(opts$MODISserverOrder)
@@ -699,29 +752,42 @@ ModisFileDownloader <- function(x, opts = NULL, ...)
                             collapse = "")
             
             ## adapt 'dlmethod' and 'extra' if server == "LPDAAC"
-            if (server == "LPDAAC") {
+            if (server %in% c("LPDAAC", "NSIDC")) {
               if (!opts$dlmethod %in% c("wget", "curl")) {
-                warning("Data download from '", server, 
-                        "' is currently only available through wget and curl.\n", 
-                        "Setting MODISoptions(dlmethod = 'wget') ",  
-                        "(or run MODISoptions(dlmethod = 'curl') to use curl instead) ...\n")
-                method <- "wget"
+
+                cmd = try(system("wget -h", intern = TRUE), silent = TRUE)
+                method = "wget"
+                
+                if (inherits(cmd, "try-error")) {
+                  cmd = try(system("curl -h", intern = TRUE), silent = TRUE)
+                  method = "curl"
+                }
+                
+                if (inherits(cmd, "try-error")) {
+                  stop("Make sure either 'wget' or 'curl' is available in "
+                       , "order to download data from LP DAAC or NSIDC.")
+                }
               } else {
                 method <- opts$dlmethod
               }
               
-              # wget extras
-              ofl = path.expand("~/.cookies.txt")
+              # cookies
+              ofl = file.path(tempdir(), ".cookies.txt")
               if (!file.exists(ofl))
                 jnk = file.create(ofl)
+              on.exit(file.remove(ofl))
               
+              # wget extras
               extra <- if (method == "wget") {
-                paste("--load-cookies", ofl
+                paste("--user", usr, "--password", pwd
+                      , "--load-cookies", ofl
                       , "--save-cookies", ofl
                       , "--keep-session-cookie --no-check-certificate")
-                # curl extras  
+                
+              # curl extras  
               } else {
-                paste('-n -L -c', ofl, '-b', ofl)
+                paste('--user', paste(usr, pwd, sep = ":")
+                      , '-k -L -c', ofl, '-b', ofl)
               }
               
             ## else if server == "NTSG", choose 'wget' as download method  
@@ -735,11 +801,31 @@ ModisFileDownloader <- function(x, opts = NULL, ...)
               extra <- getOption("download.file.extra")
             }
             
-            out[a] <- try(
+            
+            # curl download from LPDAAC or NSIDC
+            out[a] = if (method == "curl" & server %in% c("LPDAAC", "NSIDC")) {
+              h = curl::new_handle()
+              curl::handle_setopt(
+                handle = h,
+                httpauth = 1,
+                userpwd = paste0(usr, ":",pwd)
+              )
+              
+              tmp = try(curl::curl_download(infile, destfile, quiet = opts$quiet
+                                            , handle = h), silent = TRUE)
+              
+              # imitate download.file() (ie. 0 = success, non-zero = failure)
+              ifelse(inherits(tmp, "character"), 0, 1)
+              
+            # LAADS or non-curl download  
+            } else {
+              
+              try(
               download.file(url = infile, destfile = destfile, mode = 'wb', 
                             method = method, quiet = opts$quiet, 
-                            cacheOK = FALSE, extra = extra),
+                            cacheOK = TRUE, extra = extra),
                           silent = TRUE)
+            }
           }
           if (is.na(out[a])) {cat("File not found!\n"); unlink(destfile); break} # if NA then the url name is wrong!
           if (out[a]!=0 & !opts$quiet) {cat("Remote connection failed! Re-try:",g,"\r")} 
@@ -757,6 +843,12 @@ doCheckIntegrity <- function(x, opts = NULL, ...) {
   
   x <- basename(x)
   
+  ## extract collection information
+  clc = sapply(x, function(i) {
+    prd = getProduct(i, quiet = TRUE)
+    prd$CCC
+  })
+
   ## if options have not been passed down, create them from '...'
   if (is.null(opts))
     opts <- combineOptions(...)
@@ -772,7 +864,7 @@ doCheckIntegrity <- function(x, opts = NULL, ...) {
       out[a] <- NA
     } else
     { 
-      path <- genString(x[a], opts = opts)
+      path <- genString(x[a], collection = clc[a], opts = opts)
       path$localPath <- setPath(path$localPath) 
       
       hv <- 1:length(path$remotePath)
@@ -929,10 +1021,10 @@ getInfo = function(x, product = NULL, type = c("Tile", "CMG", "Swath")) {
   }
   
   ## tile identifier
-  if (type == "Tile") {
+  tid = if (type == "Tile") {
     # stringr::str_extract(x, "h[0-3][0-9]v[0-1][0-9]")
-    tid = regmatches(x, regexpr("h[0-3][0-9]v[0-1][0-9]", x))
-  }
+    regmatches(x, regexpr("h[0-3][0-9]v[0-1][0-9]", x))
+  } else "global"
   
   ## collection version
   # stringr::str_extract(x, "\\.[:digit:]{3}\\.")
@@ -952,7 +1044,8 @@ getInfo = function(x, product = NULL, type = c("Tile", "CMG", "Swath")) {
   ## set list names and return
   out = list(product, doa, tid, ccc, dop, fmt)
   names(out) = c("PRODUCT", "DATE", if (type == "Swath") "TIME"
-                 , if (type =="Tile") "TILE", "CCC", "PROCESSINGDATE", "FORMAT")
+                 , if (type %in% c("Tile", "CMG")) "TILE", "CCC"
+                 , "PROCESSINGDATE", "FORMAT")
   
   return(out)
 }
@@ -982,7 +1075,7 @@ skipDuplicateProducts = function(x, quiet = FALSE) {
   if (x %in% dpl$product) {
     if (!quiet) {
       warning("Processing ", x, " only. Use regular expressions (eg. '"
-              , x, "*') to select more than one product.")
+              , x, ".*') to select more than one product.")
     }
     
     x = paste0("^", x, "$")
@@ -990,3 +1083,52 @@ skipDuplicateProducts = function(x, quiet = FALSE) {
   
   return(x)
 }
+
+## if required, reset 'begin' of composite product to corresponding release 
+## date, see https://github.com/MatMatt/MODIS/issues/43
+correctStartDate = function(begin, avDates, product, quiet = FALSE) {
+  
+  ## check if any older files exist  
+  before = avDates < begin
+  
+  if (any(before) & !begin %in% avDates) {
+    
+    # if so, get date directly preceding 'begin'
+    ids = which(before)
+    cdt = avDates[length(ids)]
+    
+    # determine release cycle
+    tbl = table(diff(avDates))
+    rls = as.integer(names(tbl)[which.max(tbl)])
+    
+    # if time difference to preceding date is shorter than release cycle, 
+    # reset 'begin' to this date
+    if (difftime(begin, cdt, units = "days") < rls) {
+      if (!quiet) {
+        warning("Resetting 'begin' to start of corresponding ", product, " "
+                , rls, "-day composite period (", cdt, ").")
+      }
+      
+      begin = cdt
+    }
+  }
+  
+  return(begin)
+}
+
+# ## Earthdata login credentials from .netrc file
+# credentials = function() {
+#   
+#   # try to locate .netrc file
+#   nrc = path.expand("~/.netrc")
+#   if (!file.exists(nrc))
+#     stop("~/.netrc file required. Either run EarthdataLogin() or set" 
+#          , " MODISoptions(MODISserverOrder = 'LAADS').")
+#   
+#   # if file exists, import contents
+#   lns = readLines(nrc)
+#   crd = sapply(strsplit(lns, " "), "[[", 2)
+#   usr = crd[2]; pwd = crd[3]
+#   
+#   return(c("User" = usr, "Password" = pwd))
+# }

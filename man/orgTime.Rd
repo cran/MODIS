@@ -11,8 +11,8 @@
 \S4method{orgTime}{character}(files, nDays = "asIn", begin = NULL,
   end = NULL, pillow = 75, pos1, pos2, format = "\%Y\%j")
 
-\S4method{orgTime}{Date}(files, nDays = "asIn", begin = NULL, end = NULL,
-  pillow = 75)
+\S4method{orgTime}{Date}(files, nDays = "asIn", begin = NULL,
+  end = NULL, pillow = 75)
 
 \S4method{orgTime}{Raster}(files, nDays = "asIn", begin = NULL,
   end = NULL, pillow = 75, pos1, pos2, format = "\%Y\%j")
@@ -68,8 +68,8 @@ files <- c("MOD13A2.A2010353.1_km_16_days_composite_day_of_the_year.tif",
 orgTime(files)
 orgTime(files,nDays=2,begin="2010350",end="2011015")
 
+# Using other files, e.g. from AVHRR GIMMS NDVI (Jul 1981 to Dec 1982)
 \dontrun{
-# Using other files, e.g. from GIMMS (Jul 1981 to Dec 1982)
 library(gimms)
 
 files.v1 <- system.file("extdata/inventory_ecv1.rds", package = "gimms")

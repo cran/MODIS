@@ -7,13 +7,10 @@ getStruc <- function(product, collection = NULL, server = NULL, begin = NULL
   opts     <- combineOptions(...)
   sturheit <- stubborn(level = opts$stubbornness)
 
-  if (is.null(server)) {
-    server = opts$MODISserverOrder[1]
-  }
-  
   setPath(opts$auxPath, ask=FALSE)
+  
   #########################
-  # Check Platform and product
+  # Check product 
   inp = product
   product <- getProduct(x=product,quiet=TRUE)
   
@@ -21,11 +18,24 @@ getStruc <- function(product, collection = NULL, server = NULL, begin = NULL
     stop("Product '", inp, "' not recognized. See getProduct() for a list of "
          , "available products.")
   } else rm(inp)
-    
+
   # Check collection
   product$CCC = getCollection(product = product, collection = collection
                               , forceCheck = forceCheck) 
-
+  
+  # Check server
+  if (is.null(server)) {
+    server = unlist(product$SOURCE)[1]
+    
+  } else if (!server %in% (srv <- unlist(product$SOURCE))) {
+    if (!opts$quiet) {
+      warning(paste0(product$PRODUCT, ".", product$CCC), " is not available from "
+              , server, ", retrieving structure from ", srv[1], " instead.")
+    }
+    
+    server = srv[1]
+  }
+  
   dates <- transDate(begin=begin,end=end)
   todoy <- format(as.Date(format(Sys.time(),"%Y-%m-%d")),"%Y%j")
   ########################
@@ -101,9 +111,9 @@ getStruc <- function(product, collection = NULL, server = NULL, begin = NULL
       rm(FtpDayDirs)
     }
     
-    if (server=="LPDAAC")
+    if (server %in% c("LPDAAC", "NSIDC"))
     {
-      startPath <- strsplit(path$remotePath$LPDAAC,"DATE")[[1]][1] # cut away everything behind DATE
+      startPath <- strsplit(path$remotePath[[server]],"DATE")[[1]][1] # cut away everything behind DATE
       for (g in 1:sturheit)
       {
         cat("Try:",g," \r")
@@ -115,7 +125,7 @@ getStruc <- function(product, collection = NULL, server = NULL, begin = NULL
         }
         Sys.sleep(opts$wait)
       }
-      FtpDayDirs <- as.Date(as.character(FtpDayDirs),"%Y.%m.%d")
+      FtpDayDirs <- na.omit(as.Date(as.character(FtpDayDirs),"%Y.%m.%d"))
     } else if (server=="LAADS")
     {
       startPath <- strsplit(path$remotePath$LAADS,"YYYY")[[1]][1] # cut away everything behind YYYY
@@ -205,7 +215,7 @@ getStruc <- function(product, collection = NULL, server = NULL, begin = NULL
       } else {
         FtpDayDirs <- as.Date(paste(years_new, "12", "31", sep = "-"))
       }
-    }
+    } 
   }
   
   if(!exists("FtpDayDirs"))

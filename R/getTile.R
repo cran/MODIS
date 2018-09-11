@@ -9,7 +9,10 @@
 #' vertical tile number(s) of the 
 #' \href{https://nsidc.org/data/docs/daac/mod10_modis_snow/landgrid.html}{MODIS Sinusoidal grid}
 #' (e.g., \code{tileH = 1:5}). If specified, no cropping is performed and the 
-#' full tile(s) (if more than one then also mosaicked) is (are) processed!  
+#' full tile(s) (if more than one then also mosaicked) is (are) processed! 
+#' @param ... Additional arguments passed to \code{\link{MODISoptions}}. Here, 
+#' only 'outProj' and 'pixelSize' are relevant, and this only if 'x' is an 
+#' object of class \code{character}, \code{map}, \code{Extent} or \code{bbox}.
 #' 
 #' @return 
 #' A \code{MODISextent} object.
@@ -18,7 +21,8 @@
 #' Matteo Mattiuzzi, Florian Detsch
 #' 
 #' @seealso 
-#' \code{\link{extent}}, \code{\link{map}}, \code{\link{search4map}}.
+#' \code{\link{extent}}, \code{\link[sf]{st_bbox}}, \code{\link{map}}, 
+#' \code{\link{search4map}}.
 #' 
 #' @note 
 #' \strong{MODIS} does no longer support the tile identification and automated 
@@ -45,10 +49,10 @@
 #'   \code{Raster*} comes with no valid CRS, 
 #'   \href{http://spatialreference.org/ref/epsg/wgs-84/}{EPSG:4326} is assumed.\cr
 #'   \cr
-#'   \code{Extent}:\cr
-#'   \tab Boundary coordinates from \code{Extent} objects are assumed to be in 
-#'   \href{http://spatialreference.org/ref/epsg/wgs-84/}{EPSG:4326} as well as 
-#'   such objects have no projection information attached.\cr
+#'   \code{Extent}, \code{bbox}:\cr
+#'   \tab Boundary coordinates from \code{Extent} and \code{bbox} objects are 
+#'   assumed to be in \href{http://spatialreference.org/ref/epsg/wgs-84/}{EPSG:4326} 
+#'   as such objects have no projection information attached.\cr
 #'   \cr
 #'   Other:\cr
 #'   \tab \code{Spatial}, \code{sf}, or \code{map} object.
@@ -59,6 +63,7 @@
 #' # ex 1 ############
 #' # interactive tile selection
 #' getTile()
+#' }
 #' 
 #' # ex 2: Spatial (taken from ?rgdal::readOGR) ############
 #' dsn <- system.file("vectors/Up.tab", package = "rgdal")[1]
@@ -66,8 +71,9 @@
 #' getTile(Up)
 #' 
 #' # ex 3: sf ############
-#' library(mapview)
-#' getTile(franconia)
+#' ifl <- system.file("shape/nc.shp", package = "sf")
+#' nc <- sf::st_read(ifl, quiet = TRUE)
+#' getTile(nc)
 #' 
 #' # ex 4: tileH,tileV ############
 #' getTile(tileH = 18:19, tileV = 4)
@@ -80,11 +86,12 @@
 #' rst3 <- projectExtent(rst1, crs = "+init=epsg:32633")
 #' getTile(rst3)
 #' 
-#' # ex 6: Raster* without CRS or, alternatively, Extent -> treated as EPSG:4326 ############
+#' # ex 6: Raster* without CRS or, alternatively, Extent or bbox --> treated as EPSG:4326 ############
 #' mat2 <- matrix(seq(180 * 360), byrow = TRUE, ncol = 360)
-#' rst2 <- raster(mat2)
+#' rst2 <- raster(mat2, xmn = -180, xmx = 180, ymn = -90, ymx = 90)
 #' getTile(rst2)
 #' getTile(extent(rst1))
+#' getTile(sf::st_bbox(nc))
 #' 
 #' # ex 7: map names as returned by search4map() ############
 #' getTile("Austria")
@@ -97,22 +104,46 @@
 #' # or use 'map' objects directly (remember to use map(..., fill = TRUE)): 
 #' m2 <- map("state", region = "new jersey", fill = TRUE)
 #' getTile(m2)
-#' }
 #' 
 #' @export getTile
 #' @name getTile
-getTile <- function(x = NULL, tileH = NULL, tileV = NULL) {
+getTile <- function(x = NULL, tileH = NULL, tileV = NULL, ...) {
+ 
+  opts = combineOptions(...)
   
   # if 'x' is a Raster*/Spatial* and has a different CRS, the information is added here
   target <- NULL  
+  
+  ## if inputs are missing, select tile(s) interactively
+  if (all(sapply(c(x, tileH, tileV), is.null))) {
+    x = mapSelect()
+    tileH = x$h; tileV = x$v
+  }
+  
+  # ## recycle tile lengths to enable creation of tile pairs
+  # if ((len_h <- length(tileH)) != (len_v <- length(tileV))) {
+  #   if (len_h < len_v) {
+  #     if (len_v %% len_h > 0) {
+  #       stop("'tileV' is not a multiple of 'tileH'.")
+  #     }
+  #     tileH = rep(tileH, len_v / len_h)
+  #   } else {
+  #     if (len_h %% len_v > 0) {
+  #       stop("'tileH' is not a multiple of 'tileV'.")
+  #     }
+  #     tileV = rep(tileV, len_h / len_v)
+  #   }
+  # }
   
   if (all(!is.null(tileH), !is.null(tileV))) {
     if (!is.numeric(tileH)) tileH <- as.numeric(tileH)
     if (!is.numeric(tileV)) tileV <- as.numeric(tileV)
     
-    tt <- tiletable[(tiletable$ih %in% tileH) & 
-                      (tiletable$iv %in% tileV) & (tiletable$xmin >- 999), ]
-    x <- raster::extent(c(min(tt$xmin), max(tt$xmax), min(tt$ymin), max(tt$ymax)))
+    tt <- tiletable[(tiletable$ih %in% tileH) &
+                      (tiletable$iv %in% tileV) & (tiletable$lon_min > -999), ]
+
+    x <- raster::extent(c(min(tt$lon_min), max(tt$lon_max)
+                          , min(tt$lat_min), max(tt$lat_max)))
     
     tt$iv <- sprintf("%02d", tt$iv)
     tt$ih <- sprintf("%02d", tt$ih)
@@ -137,14 +168,10 @@ getTile <- function(x = NULL, tileH = NULL, tileV = NULL) {
     
     fromMap <- FALSE
     prj <- sp::CRS("+init=epsg:4326")
-    
-    # if 'x' is null, do mapSelect. Output class extent. 
-    if (is.null(x)) {
-      x <- mapSelect()
-    }  
-    
+    oprj = sp::CRS("+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs")
+
     # filename string to Raster/vector conversion
-    if(inherits(x,"character") & length(x)==1) # lengh>1 it should be only a mapname for maps:::map
+    if(inherits(x,"character") & length(x)==1) # length>1 it should be only a mapname for maps::map
     {
       if (raster::extension(x)=='.shp')
       {
@@ -169,13 +196,10 @@ getTile <- function(x = NULL, tileH = NULL, tileV = NULL) {
       x <- maps::map("worldHires", x, plot = FALSE, fill=TRUE)
     }
     
-    # maps::map (from mapdata/maps) to SpatialPolygons
-    if (inherits(x, "map")) {
-      x = maptools::map2SpatialPolygons(x, x$names, prj, checkHoles = TRUE)
-    }
-    
     # this needs to be done in order to use rgdal:::over to intersect geometies 
     if (inherits(x, c("Raster", "Spatial"))) {
+      
+      # if coord. ref. is missing, set to EPSG:4326
       target <- list(outProj = raster::projection(x)
                      , extent = raster::extent(x)
                      , pixelSize = NULL) 
@@ -186,15 +210,15 @@ getTile <- function(x = NULL, tileH = NULL, tileV = NULL) {
       # if required, spTransform() extent object
       if (!raster::compareCRS(x, prj) & !is.na(target$outProj)) {
         x <- if (inherits(x, "Raster")) {
-          raster::extent(raster::projectExtent(x, prj))
+          raster::projectExtent(x, prj)
         } else {
           sp::spTransform(x, prj)
         }
       } else if (is.na(target$outProj)) {
-        raster::projection(x) <- prj
+        target$outProj <- prj@projargs
       }
       
-      # sf method  
+    # 'sf' method  
     } else if (inherits(x, "sf")) {
       target <- list(outProj = sf::st_crs(x)$proj4string
                      , extent = raster::extent(sf::st_bbox(x)[c(1, 3, 2, 4)])
@@ -203,12 +227,35 @@ getTile <- function(x = NULL, tileH = NULL, tileV = NULL) {
       if (!raster::compareCRS(target$outProj, prj)) {
         x <- sf::st_transform(x, prj@projargs)
       }
+
+    # 'map' | 'Extent' | 'bbox' method  
+    } else if (inherits(x, c("map", "Extent", "bbox"))) {
+      
+      # convert to polygons
+      if (inherits(x, "map")) {
+        spy = x = maptools::map2SpatialPolygons(x, x$names, prj, checkHoles = TRUE)
+      } else {
+        if (inherits(x, "bbox")) {
+          tmp = as.numeric(x)[c(1, 3, 2, 4)]
+          x = raster::extent(tmp)
+        }
+        
+        spy = as(x, "SpatialPolygons"); sp::proj4string(spy) = prj@projargs
+      }
+      
+      spy = sp::spTransform(spy, if (opts$outProj == "asIn") {
+        oprj 
+      } else {
+        if (!is.na(as.integer(opts$outProj))) {
+          opts$outProj = paste0("+init=epsg:", as.integer(opts$outProj))
+        }
+        sp::CRS(opts$outProj)
+      })
+      
+      target <- list(outProj = opts$outProj
+                     , extent = raster::extent(spy)
+                     , pixelSize = opts$pixelSize)
     }
-    
-    # if (inherits(x, 'Extent')) {
-    #   x <- as(x, 'SpatialPolygons')
-    #   sp::proj4string(x) <- prj
-    # }
     
     if (inherits(x, "sf"))
       x <- methods::as(x, "Spatial")

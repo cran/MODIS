@@ -55,8 +55,8 @@ if ( !isGeneric("orgTime") ) {
 #' orgTime(files)
 #' orgTime(files,nDays=2,begin="2010350",end="2011015")
 #' 
+#' # Using other files, e.g. from AVHRR GIMMS NDVI (Jul 1981 to Dec 1982)
 #' \dontrun{
-#' # Using other files, e.g. from GIMMS (Jul 1981 to Dec 1982)
 #' library(gimms)
 #' 
 #' files.v1 <- system.file("extdata/inventory_ecv1.rds", package = "gimms")

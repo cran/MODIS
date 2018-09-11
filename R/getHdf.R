@@ -14,14 +14,10 @@ if ( !isGeneric("getHdf") ) {
 #' @param product \code{character}. MODIS grid product to be downloaded, see 
 #' \code{\link{getProduct}}. Use dot notation to address Terra and Aqua products 
 #' (e.g. \code{M.D13Q1}). 
-#' @param begin \code{character}. Begin date of MODIS time series, see 
-#' \code{\link{transDate}} for formatting. 
-#' @param end \code{character}. End date, compatible with future dates for 
-#' continuous updates via scheduled jobs. 
-#' @param tileH \code{numeric} or \code{character}. Horizontal tile number(s), 
-#' see \code{\link{getTile}}.
-#' @param tileV \code{numeric} or \code{character}. Vertical tile number(s), 
-#' see \code{tileH}.
+#' @param begin,end \code{Date} or \code{character}. Begin and end date of MODIS 
+#' time series, see \code{\link{transDate}}. 
+#' @param tileH,tileV \code{numeric} or \code{character}. Horizontal and 
+#' vertical tile number, see \code{\link{getTile}}.
 #' @param extent See Details in \code{\link{getTile}}.
 #' @param collection Desired MODIS product collection as \code{character}, 
 #' \code{integer}, or \code{list} as returned by \code{\link{getCollection}}.
@@ -40,10 +36,12 @@ if ( !isGeneric("getHdf") ) {
 #' An invisible vector of downloaded data and paths.
 #' 
 #' @references 
-#' MODIS data is obtained through the online Data Pool at the NASA Land 
-#' Processes Distributed Active Archive Center (LP DAAC), USGS/Earth Resources 
-#' Observation and Science (EROS) Center, Sioux Falls, South Dakota 
-#' \url{https://lpdaac.usgs.gov/get_data}.
+#' MODIS data is currently available from the online data pools at 
+#' \itemize{
+#' \item{NASA Land Processes Distributed Active Archive Center (\href{https://lpdaac.usgs.gov/}{LP DAAC})},
+#' \item{Level-1 and Atmosphere Archive & Distribution System (\href{https://ladsweb.modaps.eosdis.nasa.gov/}{LAADS})}, and
+#' \item{National Snow & Ice Data Center (\href{https://nsidc.org/}{NSIDC})}.
+#' }
 #' 
 #' @author 
 #' Matteo Mattiuzzi
@@ -164,16 +162,30 @@ setMethod("getHdf",
         ## ensure compatibility with servers other than those specified in 
         ## `opts$MODISserverOrder`, e.g. when downloading 'MOD16A2' from NTSG
         server <- product$SOURCE[[z]]
-        
-        if (length(server) > 1) {
-          # alternative server, i.e. when priority is not reachable
-          server_alt <- server[which(server != opts$MODISserverOrder[1])]
-          # priority server from which structure will be tried to retrieve first
-          server <- server[which(server == opts$MODISserverOrder[1])]
-        } else {
-          opts$MODISserverOrder <- server
+
+        if (!any(server %in% c("NTSG", "NSIDC"))) {
+          
+          ## if product is not available from desired server, throw error        
+          if (!any(opts$MODISserverOrder %in% server)) {
+            stop(paste(product$PRODUCT, product$CCC, sep = ".")
+                 , " is available from "
+                 , paste(server, collapse = " and ")
+                 , " only, please adjust 'MODISoptions(MODISserverOrder = ...)' accordingly.")
+          }
+          
+          ## align with servers specified in 'MODISserverOrder' -> idenfify 
+          ## priority and, if applicable, alternative download server
+          server = unlist(sapply(opts$MODISserverOrder, function(i) {
+            grep(i, server, value = TRUE)
+          }))
+          
         }
         
+        server_alt = ifelse(length(server) > 1, server[2], NA)
+        server = server[1]
+        
+        opts$MODISserverOrder = as.character(na.omit(c(server, server_alt)))
+
         ## this time, suppress console output from `getStruc`
         jnk <- capture.output(
           onlineInfo <- suppressWarnings(
@@ -185,7 +197,7 @@ setMethod("getHdf",
         
         if(!is.na(onlineInfo$online))
         {
-          if (!onlineInfo$online & length(opts$MODISserverOrder)==2 & 
+          if (!onlineInfo$online & !is.na(server_alt) & 
               server %in% c("LPDAAC", "LAADS"))
           {
             cat(server," seems not online, trying on '",server_alt,"':\n",sep="")
@@ -211,8 +223,11 @@ setMethod("getHdf",
         datedirs <- as.Date(onlineInfo$dates)
         datedirs <- datedirs[!is.na(datedirs)]            
         sel <- datedirs
-        us  <- sel >= tLimits$begin & sel <= tLimits$end
         
+        st = correctStartDate(tLimits$begin, sel, product$PRODUCT[z]
+                              , quiet = opts$quiet)
+        us = sel >= st & sel <= tLimits$end
+
         if (sum(us,na.rm=TRUE)>0)
         { 
           suboutput <- list()
@@ -335,18 +350,21 @@ setMethod("getHdf",
                 dates[[l]][i,(j+1):ncol(dates[[l]])] <- NA
               } # on ftp is possible to find empty folders!
             }
-            if(checkIntegrity)
+            
+            if(checkIntegrity & !is.na(dates[[l]][i, -1]))
             { # after each 'i' do the sizeCheck
               isIn <- doCheckIntegrity(paste0(path$localPath,dates[[l]][i,-1]), opts = opts)
             }
-            suboutput[[i]] <- paste0(path$localPath,dates[[l]][i,-1])                    
+            suboutput[[i]] <- ifelse(is.na(dates[[l]][i,-1]), NA, paste0(path$localPath,dates[[l]][i,-1]))
           } # end i
           
-          output[[l]] <-  as.character(unlist(suboutput))
+          output[[l]] <-  as.character(na.omit(unlist(suboutput)))
+          # if (length(output[[l]]) == 0) output[[l]] = NA
           names(output)[l] <- todo[u]
         } else 
         {
-          cat(paste0("No files on ftp in date range for: ",todo[u],"\n\n"))
+          warning(paste("No", product$PRODUCT, "files found for the period from"
+                        , tLimits$begin, "to", paste0(tLimits$end, ".")))
         }
       } 
     }
@@ -371,9 +389,14 @@ setMethod("getHdf",
             if (inherits(HdfName, "list"))
               HdfName <- unlist(HdfName)
             
-            HdfName <- basename(HdfName)  
+            HdfName <- basename(HdfName)
             
             dates <- sapply(HdfName, function(i) {
+
+              # if missing, add .hdf file extension
+              if (!grepl(".hdf$", i, ignore.case = TRUE)) {
+                i = paste0(i, ".hdf")
+              }              
               
               path <- genString(i, opts = opts)
               path$localPath <- setPath(path$localPath)
@@ -384,7 +407,7 @@ setMethod("getHdf",
               if(checkIntegrity)
                 jnk <- doCheckIntegrity(i, opts = opts)
               
-              paste0(path$local, "/", i)
+              gsub("//", "/", paste0(path$local, "/", i))
             })
             
             ## return output

@@ -36,7 +36,7 @@ checkResamplingType <- function(resamplingType,tool,quiet=FALSE)
       # for efficiency gdv should be stored as variable
       gdv <- checkTools('GDAL',quiet=TRUE)$GDAL$vercheck
       
-      if (gdv[2] < 10 & resamplingType %in% c("average","mode"))
+      if (gdv[1] == 1 & gdv[2] < 10 & resamplingType %in% c("average","mode"))
       {
         stop("resamplingType= 'average' and 'mode' requires GDAL >= 1.10.0")
       }
@@ -112,7 +112,7 @@ checkOutProj <- function(proj, tool, quiet=FALSE)
   dimnames=list(NULL,c("short","long")))
 
   if (tool=="GDAL") # EPRS:xxxx or xxxx or "+proj=sin...." 
-  { # EPSGinfo is lazy loaded (see: minorFuns.R)
+  { 
 
     inW <- getOption("warn")
     on.exit(options(warn=inW))
@@ -128,7 +128,7 @@ checkOutProj <- function(proj, tool, quiet=FALSE)
           proj <- CRS("+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs")@projargs
       } else
       {
-        stop("Could not convert 'outProj' argunemt",proj, "to a sp::CRS compatible string!")
+        stop("Could not convert 'outProj' argument",proj, "to a sp::CRS compatible string!")
       }
     } else if(!is.na(as.numeric(proj)))
     {
@@ -198,12 +198,11 @@ checkGdalDriver <- function(path=NULL)
     return(FALSE)
   }
     
-  if(length(grep(driver,pattern="HDF4"))==0)
-  {
-    return(FALSE)
-  } else
-  {
+  if (any(grepl(driver, pattern = "HDF4"))) {
     return(TRUE)
+  } else {
+    warning("HDF4 driver seems to be lacking. Please install GDAL with HDF4 support.")
+    return(FALSE)
   }
 }
 
@@ -219,7 +218,7 @@ combineOptions <- function(checkTools = TRUE, ...)
     #           , "Run MODISoptions() to make settings permanent!")
     # }
     requireNamespace("MODIS", quietly = TRUE)
-    MODISoptions(save=FALSE, checkTools = checkTools)    
+    jnk = capture.output(MODISoptions(save=FALSE, checkTools = checkTools))
     opts <- options() # collects all options
     opts <- opts[grep(names(opts),pattern="^MODIS_*.")] # isolate MODIS_opts
   }

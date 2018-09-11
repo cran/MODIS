@@ -33,14 +33,14 @@
 #' @param dlmethod \code{character}, defaults to \code{auto}. See 'method' in 
 #' \code{\link{download.file}}. On Unix (also Mac?), it is suggested to use 
 #' \code{"wget"} or, if installed, \code{"aria2"}. In order to download MODIS 
-#' files from LPDAAC, please note that either wget (default) or curl must be 
-#' installed and made available through the PATH environmental variable.
+#' files from LPDAAC and NSIDC, please note that either wget (default) or curl 
+#' must be installed and made available through the PATH environmental variable.
 #' @param stubbornness \code{numeric}. The number of retries after the target 
 #' server has refused a connection. Higher values increase the chance of getting 
 #' the file, but also lead to hanging functions if the server is down.
 #' @param wait \code{numeric} waiting time (in seconds) inserted after each 
 #' internal online download call via \code{\link{download.file}} or 
-#' \code{\link{getURL}}. Reduces the chance of FTP connection errors that 
+#' \code{\link[curl]{curl}}. Reduces the chance of connection errors that 
 #' frequently occur after many requests.
 #' @param systemwide A \code{logical} determining whether changes made to 
 #' \code{\link{MODISoptions}} are to be applied system or user-wide (default), 
@@ -50,6 +50,10 @@
 #' @param save \code{logical}. If \code{TRUE} (default), settings are permanent.
 #' @param checkTools \code{logical}, defaults to \code{TRUE}. Check if external 
 #' tools (i.e., GDAL and MRT) are installed and reachable through R.
+#' @param checkWriteDrivers \code{logical}. If \code{TRUE} (default), find write 
+#' drivers supported by local GDAL installation.
+#' @param ask \code{logical}. If \code{TRUE} (default) and permanent settings 
+#' file does not exist (see Details), the user is asked whether to create it.
 #' 
 #' @return 
 #' An invisible \code{list} of \strong{MODIS} options. In addition, the most 
@@ -120,7 +124,8 @@
 MODISoptions <- function(localArcPath, outDirPath, pixelSize, outProj, 
                          resamplingType, dataFormat, gdalPath, MODISserverOrder, 
                          dlmethod, stubbornness, wait, quiet, 
-                         systemwide = FALSE, save = TRUE, checkTools = TRUE)
+                         systemwide = FALSE, save = TRUE, checkTools = TRUE
+                         , checkWriteDrivers = TRUE, ask = TRUE)
 {
   # This function collects the package options from up to 3 files and creates 
   # the .MODIS_Opts.R file (location depending on systemwide=T/F, see below):
@@ -226,7 +231,7 @@ MODISoptions <- function(localArcPath, outDirPath, pixelSize, outProj,
   {
     outDirPath <- correctPath(outDirPath)
     
-    if (length(list.dirs(opt$outDirPath,recursive=FALSE))==0)
+    if (!dir.exists(outDirPath))
     {
       message("'outDirPath' does not exist and will be created in '"
               , normalizePath(outDirPath, "/", FALSE), "'.")
@@ -240,7 +245,7 @@ MODISoptions <- function(localArcPath, outDirPath, pixelSize, outProj,
     opt$outDirPath <- outDirPath
   } else
   {
-    if (length(list.dirs(opt$outDirPath,recursive=FALSE))==0)
+    if (!dir.exists(opt$outDirPath))
     {
       if(!isTRUE(options()$MODIS_outDirPathWarned))
       {
@@ -288,7 +293,7 @@ MODISoptions <- function(localArcPath, outDirPath, pixelSize, outProj,
   if (!missing(gdalPath))
   {
     opt$gdalPath <- correctPath(gdalPath)
-    if(length(grep(dir(opt$gdalPath),pattern="gdalinfo"))==0)
+    if(all(!grepl("gdalinfo", dir(opt$gdalPath))))
     {
       stop(paste0("The 'gdalPath' you have provided '",normalizePath(opt$gdalPath,"/",FALSE) ,"' does not contain any gdal utilities, make sure to address the folder with GDAL executables (ie: gdalinfo)!"))
     }
@@ -370,7 +375,7 @@ MODISoptions <- function(localArcPath, outDirPath, pixelSize, outProj,
     opt$dataFormat <- 'GTiff'
   }
   
-  if(checkTools & opt$gdalOk)
+  if(checkTools & opt$gdalOk & checkWriteDrivers)
   {
     opt$gdalOutDriver <- gdalWriteDriver(renew = FALSE, quiet = FALSE, gdalPath=opt$gdalPath,outDirPath=opt$outDirPath)
   }
@@ -378,10 +383,12 @@ MODISoptions <- function(localArcPath, outDirPath, pixelSize, outProj,
   if (save) {
     
     #  let user decide whether to make settings permanent
-    answer = if (!file.exists(optfile)) {
-      readline(paste0("File '", optfile, "' does not exist. Create it now to "
-                      , "make settings permanent? [y/n]: "))
-    } else "y"
+    answer = if (ask) {
+      if (!file.exists(optfile)) {
+        readline(paste0("File '", optfile, "' does not exist. Create it now to "
+                        , "make settings permanent? [y/n]: "))
+      } else "y"
+    } else "n"
       
     filename = file(ifelse(tolower(answer) %in% c("y", "yes"), optfile, tmpopt)
                     , open = "wt")

@@ -7,7 +7,7 @@
 runGdal(product, collection = NULL, begin = NULL, end = NULL,
   extent = NULL, tileH = NULL, tileV = NULL, SDSstring = NULL,
   job = NULL, checkIntegrity = TRUE, forceDownload = TRUE,
-  overwrite = FALSE, ...)
+  overwrite = FALSE, maskValue = NULL, ...)
 }
 \arguments{
 \item{product}{\code{character}, see \code{\link{getProduct}}.}
@@ -15,19 +15,14 @@ runGdal(product, collection = NULL, begin = NULL, end = NULL,
 \item{collection}{\code{character} or \code{integer}, see 
 \code{\link{getCollection}}.}
 
-\item{begin}{\code{character}. Begin date of MODIS time series, see 
-\code{\link{transDate}} for formatting.}
-
-\item{end}{Same for end date.}
+\item{begin, end}{\code{Date} or \code{character}. Begin and end date of MODIS 
+time series, see \code{\link{transDate}}.}
 
 \item{extent}{Extent information, defaults to \code{'global'}. See
 \code{\link{getTile}}.}
 
-\item{tileH}{\code{numeric} or \code{character}. Horizontal tile number, 
-see \code{\link{getTile}}.}
-
-\item{tileV}{\code{numeric} or \code{character}. Vertical tile number(s), 
-see \code{tileH}.}
+\item{tileH, tileV}{\code{numeric} or \code{character}. Horizontal and 
+vertical tile number, see \code{\link{getTile}}.}
 
 \item{SDSstring}{\code{character}, see \code{\link{getSds}}.}
 
@@ -41,16 +36,21 @@ output folder. If not specified, it is created in 'PRODUCT.COLLECTION_DATETIME'.
 \item{overwrite}{\code{logical}, defaults to \code{FALSE}. Determines 
 whether or not to overwrite existing SDS output files.}
 
-\item{...}{Additional arguments passed to \code{MODIS:::combineOptions()} (eg
-'wait'), see also \code{\link{MODISoptions}}.}
+\item{maskValue}{\code{numeric}. Value to be excluded when resampling (via gdalwarp -srcnodata argument).
+This allows non-data values, for example water, to be ignored and thus not effect the final data.
+NOTE: this argument will be ignored if the original SDS has a No Data value defined.}
+
+\item{...}{Additional arguments passed to \code{\link{MODISoptions}}, e.g. 
+'wait'. Permanent settings for these arguments are temporarily overridden.}
 }
 \value{
-A \code{list} of the same length as 'product'. Each product slot holds a 
-sub-\code{list} of processed dates which, for each time step, include the 
-corresponding output files as \code{character} objects.
+A \code{list} of the same length as 'product'. Each product slot either holds 
+a sub-\code{list} of processed dates which, for each time step, include the 
+corresponding output files as \code{character} objects or, if no files could 
+be found for the specified time period, a single \code{NA}.
 }
 \description{
-Downloads MODIS grid data from archive (FTP or local) and processes the 
+Downloads MODIS grid data from archive (HTTP or local) and processes the 
 files.
 }
 \details{

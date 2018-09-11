@@ -10,18 +10,19 @@
 #' collection number formatted based on the \code{as} parameter or \code{FALSE} 
 #' if it doesn't exists. The check is performed on 
 #' \href{https://lpdaac.usgs.gov/}{LP DAAC} as the exclusive source for several 
-#' (but by far not all) products.
+#' products or, for snow cover (MOD/MYD10) and sea ice extent (MOD/MYD29), 
+#' \href{https://nsidc.org/}{NSIDC}.
 #' @param newest \code{logical}. If \code{TRUE} (default), return only the 
 #' newest collection, else return all available collections.
 #' @param forceCheck \code{logical}, defaults to \code{FALSE}. If \code{TRUE}, 
-#' connect to the 'LP DAAC' FTP server and get available collections, of which 
-#' an updated version is permanently stored in 
+#' connect to the 'LP DAAC' or 'NSIDC' server and get available collections, of 
+#' which an updated version is permanently stored in 
 #' \code{MODIS:::combineOptions()$auxPath}.
 #' @param as \code{character}, defaults to \code{'character'} which returns the 
 #' typical 3-digit collection number (i.e., \code{"005"}). \code{as = 'numeric'} 
 #' returns the result as \code{numeric} (i.e., \code{5}).
-#' @param quiet \code{logical}, defaults to \code{TRUE}.
-#' @param ... Additional arguments passed to \code{MODIS:::combineOptions}.
+#' @param ... Additional arguments passed to \code{\link{MODISoptions}}.
+#' Permanent settings for these arguments are temporarily overridden.
 #' 
 #' @return 
 #' A 3-digit \code{character} or \code{numeric} object (depending on 'as') or, 
@@ -53,7 +54,7 @@
 #' 
 #' @export getCollection
 #' @name getCollection
-getCollection <- function(product,collection=NULL,newest=TRUE,forceCheck=FALSE,as="character",quiet=TRUE, ...)
+getCollection <- function(product,collection=NULL,newest=TRUE,forceCheck=FALSE,as="character", ...)
 {
     opts <- combineOptions(...)
 
@@ -64,7 +65,7 @@ getCollection <- function(product,collection=NULL,newest=TRUE,forceCheck=FALSE,a
         stop("Please provide a valid product")
     }
     productN <- getProduct(x = if (is.character(product)) {
-      sapply(product, function(i) skipDuplicateProducts(i, quiet = quiet))
+      sapply(product, function(i) skipDuplicateProducts(i, quiet = opts$quiet))
     } else product, quiet = TRUE)
     if (is.null(productN)) 
     {
@@ -74,7 +75,7 @@ getCollection <- function(product,collection=NULL,newest=TRUE,forceCheck=FALSE,a
     ## if 'collections' dataset does not exist in opts$auxPath, copy it from 
     ## 'inst/external', then import data
     dir_aux <- opts$auxPath
-    if (!dir.exists(dir_aux)) dir.create(dir_aux)
+    if (!dir.exists(dir_aux)) dir.create(dir_aux, recursive = TRUE)
     
     fls_col <- file.path(dir_aux, "collections.RData")
     
@@ -100,7 +101,8 @@ getCollection <- function(product,collection=NULL,newest=TRUE,forceCheck=FALSE,a
         ftp_id <- sapply(MODIS_FTPinfo, function(i) i$name %in% server)
         ftp_id <- which(ftp_id)[1]
         
-        ftp <- file.path(MODIS_FTPinfo[[ftp_id]]$basepath, productN$PF1[i], "/")
+        nms = paste0("PF", ftp_id)
+        ftp <- file.path(MODIS_FTPinfo[[ftp_id]]$basepath, productN[[nms]][i], "/")
         cat("Updating collection from", server[1], "for product:"
             , productN$PRODUCT[i], "\n")
         
@@ -122,7 +124,7 @@ getCollection <- function(product,collection=NULL,newest=TRUE,forceCheck=FALSE,a
         
         if (!exists("dirs")) 
         {
-          cat("FTP is not available, using stored information from previous calls (this should be mostly fine)\n")
+          cat("Server is not available, using stored information from previous calls (this should be mostly fine)\n")
         } else 
         {
           
@@ -131,7 +133,23 @@ getCollection <- function(product,collection=NULL,newest=TRUE,forceCheck=FALSE,a
                       , value = TRUE)
           
           ids = sapply(file.path(ftp, dirs, "/"), function(ftpdir) {
-            cnt = RCurl::getURL(ftpdir, dirlistonly = TRUE)
+            
+            # define curl handle
+            h <- curl::new_handle()
+            if (grepl("nsidc", ftpdir)) {
+              curl::handle_setopt(
+                handle = h,
+                httpauth = 1,
+                userpwd = paste0(credentials()$login, ":", credentials()$password)
+              )
+            }
+              
+            # list available folders 
+            con = curl::curl(ftpdir, handle = h)
+            on.exit(try(close(con), silent = TRUE))
+            cnt = readLines(con)
+            close(con)
+            
             dts = regmatches(cnt, regexpr("[[:digit:]]{4}\\.[[:digit:]]{2}\\.[[:digit:]]{2}", cnt))
             
             return(length(dts) > 0)
@@ -230,7 +248,7 @@ getCollection <- function(product,collection=NULL,newest=TRUE,forceCheck=FALSE,a
 
     } else if (newest) 
     {
-	    if (!quiet) {
+	    if (!opts$quiet) {
 	      cat("No collection specified, getting the newest for", productN$PRODUCT, "\n")
 	    }
 
