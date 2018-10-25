@@ -700,6 +700,14 @@ ModisFileDownloader <- function(x, opts = NULL, ...)
     usr = credentials()$login
     pwd = credentials()$password
     
+    # ~/.netrc is mandatory for LP DAAC and NSIDC, hence if missing, 
+    # create it to avoid repeat authentication failures
+    if (any(is.null(c(usr, pwd)))) {
+      jnk = EarthdataLogin()
+      usr = credentials()$login
+      pwd = credentials()$password
+    }
+    
     ## if options have not been passed down, create them from '...'
     if (is.null(opts))
       opts <- combineOptions(...)
@@ -715,8 +723,9 @@ ModisFileDownloader <- function(x, opts = NULL, ...)
     
     for (a in seq_along(x))
     {  # a=1
-        path <- genString(x[a], collection = getCollection(x[a], quiet = TRUE), opts = opts)
+        path           <- genString(x[a], collection = getCollection(x[a], quiet = TRUE), opts = opts)
         path$localPath <- setPath(path$localPath)
+        destfile       <- paste0(path$localPath,x[a])
         
         hv <- seq_along(opts$MODISserverOrder)
         hv <- rep(hv,length=opts$stubbornness)
@@ -725,13 +734,19 @@ ModisFileDownloader <- function(x, opts = NULL, ...)
         {     
           if (!opts$quiet)
           {
+            if(length(path$remotePath) > 1 & opts$dlmethod == "aria2")
+            {
+              cat("\nMultisocket connection to:",paste(names(path$remotePath), collapse = ' and '),"\n############################\n")
+            } else
+            {
               cat("\nGetting file from:",opts$MODISserverOrder[hv[g]],"\n############################\n")
+            }
           }
-          destfile <- paste0(path$localPath,x[a])
           
-          if(!.Platform$OS=="windows" & opts$dlmethod=="aria2")
+          # we need to check the behaviour of aria on windows...
+          if(opts$dlmethod=="aria2")
           {
-            out[a] <- system(paste0("aria2c -x 3 --file-allocation=none ",paste(path$remotePath[which(names(path$remotePath)==opts$MODISserverOrder[hv[g]])],x[a],sep="/",collapse="")," -d ", dirname(destfile)))
+            out[a] <- system(paste0("aria2c -x2 --file-allocation=none --allow-overwrite=true ", paste(path$remotePath,x[a],sep="/",collapse=" "), " -d ", dirname(destfile)))
           } else
           {
 
@@ -802,7 +817,7 @@ ModisFileDownloader <- function(x, opts = NULL, ...)
             }
             
             
-            # curl download from LPDAAC or NSIDC
+            # curl download from LP DAAC or NSIDC
             out[a] = if (method == "curl" & server %in% c("LPDAAC", "NSIDC")) {
               h = curl::new_handle()
               curl::handle_setopt(
