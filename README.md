@@ -1,22 +1,25 @@
-## MODIS 
+## **MODIS**: Acquisition and Processing of MODIS Products
 
-[![](https://www.r-pkg.org/badges/version/MODIS)](https://www.r-pkg.org/pkg/MODIS)
-
-Acquisition and Processing of MODIS Products
+[![CRAN_version](http://www.r-pkg.org/badges/version/MODIS)](https://cran.r-project.org/package=MODIS)
+[![CRAN_check](https://cranchecks.info/badges/worst/MODIS)](https://cran.r-project.org/web/checks/check_results_MODIS.html)
+[![GitHub](https://img.shields.io/github/license/mashape/apistatus.svg)](https://opensource.org/licenses/MIT)
+[![Join the chat at https://gitter.im/r-modis/Lobby](https://badges.gitter.im/r-modis/Lobby.svg)](https://gitter.im/r-modis/Lobby?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge)
 
 
 ====
 
-### News
+### Package downloads
 
-**MODIS_1.1.4** is now available for [download](https://cran.r-project.org/package=MODIS). Please refer to [NEWS](https://github.com/MatMatt/MODIS/blob/master/NEWS.md) for a detailed change log.
+This month      | In total
+--------------- | -----------
+![month](http://cranlogs.r-pkg.org/badges/MODIS) | ![total](http://cranlogs.r-pkg.org/badges/grand-total/MODIS)
 
 
 ====
 
 ### Installation
 
-As of 2017-01-10, **MODIS** is finally available from [CRAN](https://cran.r-project.org/package=MODIS) and can be installed via 
+**MODIS** can be installed via 
 
 
 ```S
@@ -30,13 +33,14 @@ To install the latest development version, first install **[devtools](https://cr
 devtools::install_github("MatMatt/MODIS", ref = "develop")
 ```
 
+
 ====
 
-### Package downloads
+### Additional resources
 
-This month      | In total
---------------- | -----------
-![month](http://cranlogs.r-pkg.org/badges/MODIS) | ![total](http://cranlogs.r-pkg.org/badges/grand-total/MODIS)
+* https://stevemosher.wordpress.com/modis-tutorial/
+* http://strimas.com/ebird-best-practices/habitat.html#habitat-dl
+
 
 ====
 

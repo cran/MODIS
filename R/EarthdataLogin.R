@@ -3,8 +3,8 @@
 #' @description 
 #' Create a hidden \code{.netrc} file with Earthdata login credentials in your 
 #' home directory. The information included therein is used to login to 
-#' \url{urs.earthdata.nasa.gov} which is a mandatory requirement in order to 
-#' download MODIS data from LP DAAC and NSIDC (see also 
+#' \url{https://urs.earthdata.nasa.gov/} which is a mandatory requirement in 
+#' order to download MODIS data from LP DAAC and NSIDC (see also 
 #' \code{\link{MODISoptions}}). If \code{.netrc} does exists the function can
 #' be used to re-enter credentials.  
 #' 
@@ -130,10 +130,10 @@ EarthdataLogin <- function(usr = NULL, pwd = NULL) {
 }
 
 ## Earthdata login credentials from .netrc file
-readCredentials = function() {
+readCredentials = function(path = "~/.netrc") {
   
-  # ~/.netrc file
-  nrc = path.expand("~/.netrc")
+  # .netrc file
+  nrc = path.expand(path)
   
   if (file.exists(nrc))
   {  
@@ -176,11 +176,11 @@ readCredentials = function() {
 }
 
 # internal function to retrieve a specific earthdata server (hard coded for its now sufficient)
-credentials <- function()
+credentials <- function(path = "~/.netrc")
 {
   #server   <- c('urs.earthdata.nasa.gov', 'e4ftl01.cr.usgs.gov','ladsweb.modaps.eosdis.nasa.gov', 'n5eil01u.ecs.nsidc.org')
   server   <- 'urs.earthdata.nasa.gov'
-  lns      <- readCredentials()
+  lns      <- readCredentials(path)
   machines <- unlist(listPather(lns,'machine'))
   select   <- which(machines %in% server)
   return(lns[[select]])

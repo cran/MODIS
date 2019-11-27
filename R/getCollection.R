@@ -61,6 +61,15 @@ getCollection <- function(product, collection = NULL, newest = TRUE
   {
     stop("Please provide a valid product")
   }
+  
+  # check for collection
+  if (inherits(product, "character") & is.null(collection)) {
+    if (grepl("\\d{3}$", product)) {
+      collection = regmatches(product, regexpr("\\d{3}$", product))
+      product = gsub("\\d{3}$", "", product)
+    }
+  }
+  
   productN <- getProduct(x = if (is.character(product)) {
     sapply(product, function(i) skipDuplicateProducts(i, quiet = opts$quiet))
   } else product, quiet = TRUE)
@@ -91,11 +100,6 @@ getCollection <- function(product, collection = NULL, newest = TRUE
     # NSIDC, hence if missing, create them to avoid authentication failures
     crd = credentials()
     usr = crd$login; pwd = crd$password
-    
-    if (any(is.null(c(usr, pwd)))) {
-      crd = EarthdataLogin()
-      usr = crd$login; pwd = crd$password
-    }
     
     sturheit <- stubborn(level=opts$stubbornness)
     
@@ -153,6 +157,11 @@ getCollection <- function(product, collection = NULL, newest = TRUE
           # (see also https://github.com/jeroen/curl/issues/72)
           h <- curl::new_handle(CONNECTTIMEOUT = 60L)
           if (grepl("nsidc", ftpdir)) {
+            if (any(is.null(c(usr, pwd)))) {
+              crd = EarthdataLogin()
+              usr = crd$login; pwd = crd$password
+            }
+            
             curl::handle_setopt(
               handle = h,
               httpauth = 1,
@@ -254,11 +263,11 @@ getCollection <- function(product, collection = NULL, newest = TRUE
     
     if (sum(isOk==FALSE)==length(isOk)) 
     {
-      cat("Product(s) not available in collection '",collection,"'. Try 'getCollection('",productN@request,"',newest=FALSE,forceCheck=TRUE)'\n",sep="")
+      cat("Product(s) not available in collection '",collection,"'. Try 'getCollection('",productN@PRODUCT,"', newest = FALSE, forceCheck = TRUE)'\n",sep="")
       return(invisible(isOk))
     } else if (sum(isOk==FALSE)>0 & sum(isOk==FALSE)<length(isOk))
     {
-      cat("Not all the products in your input are available in collection '", collection,"'. Try 'getCollection('", productN@request, "', newest=FALSE, forceCheck=TRUE)'\n", sep="")
+      cat("Not all the products in your input are available in collection '", collection,"'. Try 'getCollection('", productN@PRODUCT, "', newest = FALSE, forceCheck = TRUE)'\n", sep="")
     }
     
     res <- isOk[isOk!=FALSE]

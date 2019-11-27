@@ -4,10 +4,22 @@
 \alias{runGdal}
 \title{Process MODIS HDF with GDAL}
 \usage{
-runGdal(product, collection = NULL, begin = NULL, end = NULL,
-  extent = NULL, tileH = NULL, tileV = NULL, SDSstring = NULL,
-  job = NULL, checkIntegrity = TRUE, forceDownload = TRUE,
-  overwrite = FALSE, maskValue = NULL, ...)
+runGdal(
+  product,
+  collection = NULL,
+  begin = NULL,
+  end = NULL,
+  extent = NULL,
+  tileH = NULL,
+  tileV = NULL,
+  SDSstring = NULL,
+  job = NULL,
+  checkIntegrity = TRUE,
+  forceDownload = TRUE,
+  overwrite = FALSE,
+  maskValue = NULL,
+  ...
+)
 }
 \arguments{
 \item{product}{\code{character}, see \code{\link{getProduct}}.}
@@ -82,13 +94,11 @@ define the area of interest, and \code{outProj} and \code{pixelSize} are
 \code{dataFormat}, default "GeoTiff" (\code{\link{MODISoptions}}).\cr
 }
 \note{
-You need to have a GDAL installed on your system!\cr
-\url{http://www.gdal.org/gdal_utilities.html}\cr\cr
-On Unix-alkes, install 'gdal-bin' (i.e. Ubuntu: 'sudo apt-get install gdal-bin')\cr
-On Windows, you need to install GDAL through OSGeo4W 
-(\url{http://trac.osgeo.org/osgeo4w/}) or FWTools 
-(\url{http://fwtools.maptools.org/}) since the standard GDAL does not support 
-HDF4 format.
+You need to have \href{https://gdal.org/}{GDAL} installed on your system.\cr\cr
+On Unix-alkes, install \code{gdal-bin}.\cr
+On Windows, you need to install GDAL through \href{http://trac.osgeo.org/osgeo4w/}{OSGeo4W} 
+or \href{http://fwtools.maptools.org/}{FWTools} since the standard GDAL does 
+not support HDF4 format.
 }
 \examples{
 \dontrun{

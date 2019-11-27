@@ -1,8 +1,8 @@
 Package: MODIS
 Type: Package
 Title: Acquisition and Processing of MODIS Products
-Version: 1.1.5
-Date: 2019-03-08
+Version: 1.1.6
+Date: 2019-11-29
 URL: https://github.com/MatMatt/MODIS
 BugReports: https://github.com/MatMatt/MODIS/issues
 Authors@R: c(
@@ -24,17 +24,17 @@ Description: Download and processing functionalities for the Moderate Resolution
     subsetting and time series filtering.
 License: MIT + file LICENSE
 LazyData: TRUE
-Depends: mapdata, R (>= 2.10), raster
+Depends: mapdata, R (>= 3.5.0), raster
 Imports: bitops, curl, devtools, grDevices, graphics, mapedit, maps,
         maptools, methods, parallel, ptw, rgdal, rgeos, sf, sp, stats,
         utils
 SystemRequirements: GDAL (>= 1.8.0)
 ByteCompile: TRUE
 Encoding: UTF-8
-RoxygenNote: 6.1.1
+RoxygenNote: 7.0.1
 Suggests: testthat
 NeedsCompilation: no
-Packaged: 2019-03-08 09:46:02 UTC; FlorianD
+Packaged: 2019-11-30 17:21:04 UTC; FlorianD
 Author: Matteo Mattiuzzi [aut],
   Jan Verbesselt [ctb],
   Tomislav Hengl [ctb],
@@ -47,4 +47,4 @@ Author: Matteo Mattiuzzi [aut],
   Florian Detsch [cre, aut]
 Maintainer: Florian Detsch <fdetsch@web.de>
 Repository: CRAN
-Date/Publication: 2019-03-08 13:43:00 UTC
+Date/Publication: 2019-12-01 17:30:08 UTC
