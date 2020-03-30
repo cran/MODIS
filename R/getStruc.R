@@ -114,110 +114,54 @@ getStruc <- function(product, collection = NULL, server = NULL, begin = NULL
       rm(FtpDayDirs)
     }
     
-    if (server %in% c("LPDAAC", "NSIDC"))
-    {
-      startPath <- strsplit(path$remotePath[[server]],"DATE")[[1]][1] # cut away everything behind DATE
-      for (g in 1:sturheit)
-      {
-        cat("Try:",g," \r")
-        FtpDayDirs <- try(filesUrl(startPath))
-        cat("             \r")
-        if(exists("FtpDayDirs"))
-        {    
-          break
-        }
-        Sys.sleep(opts$wait)
-      }
-      FtpDayDirs <- na.omit(as.Date(as.character(FtpDayDirs),"%Y.%m.%d"))
-    } else if (server=="LAADS")
-    {
-      startPath <- strsplit(path$remotePath$LAADS,"YYYY")[[1]][1] # cut away everything behind YYYY
-      opt <- options("warn")
-      options("warn"=-1)
-      rm(years)
+    servers = intersect(
+      unlist(product@SOURCE)
+      , server
+    )
+    
+    FtpDayDirs = try(log("e"), silent = TRUE)
+    g = 1L
+    
+    while (inherits(FtpDayDirs, "try-error") & g <= sturheit) {
+      server = ifelse(
+        length(servers) > 1
+        , servers[(g %% length(servers) == 0) + 1L]
+        , servers
+      )
+      startPath = unlist(strsplit(path$remotePath[[server]], "DATE|YYYY"))[1] # cut away everything behind DATE
       
-      once <- TRUE
-      for (g in 1:sturheit)
-      {
-        cat("Downloading structure from 'LAADS'-server! Try:",g,"\r")
-        years <- try(filesUrl(startPath))
-        years <- as.character(na.omit(as.numeric(years))) # removes folders/files probably not containing data
+      if (g > 1L) Sys.sleep(opts$wait)
+      FtpDayDirs = try(filesUrl(startPath), silent = TRUE)
+      g = g + 1L
+    }
+    
+    
+    ### . lpdaac, nsidc ----
+    
+    FtpDayDirs = if (server %in% c("LPDAAC", "NSIDC")) {
+      
+      na.omit(as.Date(as.character(FtpDayDirs),"%Y.%m.%d"))
+      
+      ### . laads ----
+      
+    } else if (server=="LAADS") {
+      
+      Ypath = paste0(startPath, FtpDayDirs, "/")
+      
+      ouou = mapply(function(i, j) {
+        cat("\t...", i, "\n")
+        ou = try(log("e"), silent = TRUE)
+        g = 1L
         
-        if(g < (sturheit/2))
-        {
-          Sys.sleep(opts$wait)
-        } else
-        {
-          if(once & (30 > opts$wait)) {cat("Server problems, trying with 'wait=",max(30,opts$wait),"\n")}
-          once <- FALSE                        
-          Sys.sleep(max(30,opts$wait))
+        while (inherits(ou, "try-error") & g <= sturheit) {
+          if (g > 1) Sys.sleep(opts$wait)
+          ou = try(paste0(i, filesUrl(j)), silent = TRUE)
+          g = g + 1L
         }
-        if(exists("years"))
-        {    
-          break
-        }
-        cat("                                                      \r") 
-      }
-      options("warn"=opt$warn)
-      
-      Ypath <- paste0(startPath,years,"/")
-      
-      ouou <- vector(length=length(years),mode="list")
-      for(ix in seq_along(Ypath))
-      {
-        cat("Downloading structure of '",years[ix],"' from '",server,"'-server.                        \r",sep="")
-        ouou[[ix]] <- paste0(years[ix], filesUrl(Ypath[ix]))
-      }
-      cat("                                                                    \r")
-      FtpDayDirs <- as.Date(unlist(ouou),"%Y%j")
-      
-    } else if (server == "NTSG") {
-      
-      startPath <- strsplit(path$remotePath$NTSG,"YYYY")[[1]][1] # cut away everything behind YYYY
-      opt <- options("warn")
-      options("warn"=-1)
-
-      once <- TRUE
-      for (g in 1:sturheit) {
         
-        cat("Downloading structure from 'NTSG'-server! Try:", g, "\n")
-        years <- try(filesUrl(startPath), silent = TRUE)
-        
-        if (!inherits(years, "try-error")) {
-          years_new <- gsub("^Y", "", years)
-          break
-          
-        } else {  
-          
-          if (g < (sturheit/2)) {
-            Sys.sleep(opts$wait)
-          } else {
-            if (once & (30 > opts$wait)) {
-              cat("Encountering server problems, now trying with 'wait = 30'...\n")
-            }
-            once <- FALSE                        
-            Sys.sleep(max(30,opts$wait))
-          }
-        }
-      }
-      options("warn"=opt$warn)
-      
-      if (product@PRODUCT != "MOD16A3") {
-        Ypath <- paste0(startPath,years,"/")
-        
-        ouou <- vector(length=length(years),mode="list")
-        cat("Downloading structure from", years_new[1], "to", years_new[length(years_new)], "from", server, "file server.\n")
-        for(ix in seq_along(Ypath))
-        {
-          ouou[[ix]] <- paste(years[ix], filesUrl(Ypath[ix]), sep = "/")
-        }
-        cat("                                                                    \r")
-        FtpDayDirs <- as.Date(unlist(ouou),"Y%Y/D%j")
-      
-      ## if product is 'MOD16A3', no daily sub-folders exist    
-      } else {
-        FtpDayDirs <- as.Date(paste(years_new, "12", "31", sep = "-"))
-      }
+        return(ou)
+      }, FtpDayDirs, Ypath, SIMPLIFY = FALSE, USE.NAMES = FALSE)
+      as.Date(unlist(ouou),"%Y%j")
     } 
   }
   

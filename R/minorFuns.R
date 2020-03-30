@@ -606,97 +606,69 @@ listPather <- function(x,index)
 filesUrl <- function(url)
 {
 
-    if (substr(url,nchar(url),nchar(url))!="/")
-    {
-       url <- paste0(url,"/") 
+  if (substr(url,nchar(url),nchar(url))!="/")
+  {
+    url <- paste0(url,"/") 
+  }
+  
+  iw = options()$warn 
+  options(warn = -1)
+  on.exit(options(warn = iw))
+  
+  h <- curl::new_handle(
+    connecttimeout = 10L
+  )
+  
+  ## laads, nsidc require login
+  if (grepl("nsidc|ladsweb", url)) {
+    crd = credentials()
+    usr = crd$login; pwd = crd$password
+    
+    if (any(is.null(c(usr, pwd)))) {
+      crd = EarthdataLogin()
+      usr = crd$login; pwd = crd$password
     }
     
-    iw   <- options()$warn 
-    options(warn=-1)
-
-    ## LP DAAC, NSIDC
-    if (grepl("usgs.gov|nsidc", url)) 
-    {
-      h <- curl::new_handle(CONNECTTIMEOUT = 60L)
-      if (grepl("nsidc", url)) {
-        # Earthdata login credentials in ~/.netrc are mandatory for LP DAAC and 
-        # NSIDC, hence if missing, create them to avoid authentication failures
-        crd = credentials()
-        usr = crd$login; pwd = crd$password
-        
-        if (any(is.null(c(usr, pwd)))) {
-          crd = EarthdataLogin()
-          usr = crd$login; pwd = crd$password
-        }
-        
-        curl::handle_setopt(
-          handle = h,
-          httpauth = 1,
-          userpwd = paste0(usr, ":", pwd)
-        )
-      }
-      
-      # read online content
-      con = curl::curl(url, handle = h)
-      on.exit(try(close(con), silent = TRUE))
-      co = readLines(con)
+    curl::handle_setopt(
+      handle = h,
+      httpauth = 1,
+      userpwd = paste0(usr, ":", pwd)
+    )
+  }
+  
+  ## establish connection
+  is_laads = grepl("ladsweb", url)
+  con = curl::curl(
+    ifelse(is_laads, gsub("/$", ".csv", url), url)
+    , handle = h
+  )
+  on.exit(
+    try(
       close(con)
-      
-      # extract '<a href=...> nodes
-      pttrn = '<a href=\"[[:graph:]]{1,}\">[[:graph:]]{1,}</a>'
-      tmp = sapply(co, function(i) {
-        regmatches(i, regexpr(pttrn, i))
-      })
-      
-      spl1 = sapply(strsplit(unlist(tmp), ">"), "[[", 2)
-      fnames = as.character(sapply(strsplit(spl1, "<"), "[[", 1))
-
-    ## LAADS  
-    } else if (grepl("nasa", url)) {
-      
-      url = gsub("/$", "", url)
-      tmp = utils::read.csv(paste0(url, ".csv"), colClasses = "character")
-      fnames = tmp$name[grep("[^NOTICE]", tmp$name)]
-      
-    ## NTSG method; if not used, connection breakdowns are likely to occur  
-    } else if (grepl("ntsg", url)) {
-      
-      # 'MODIS' options
-      opts <- combineOptions()
-      
-      # download website to opts$auxPath
-      file_out <- paste0(opts$auxPath, "/index.html")
-      jnk <- capture.output(
-        download.file(url = url, destfile = file_out, quiet = TRUE, method = "wget")
-      )
-      
-      # extract information from website content
-      content <- readLines(file_out)
-      
-      fnames <- sapply(
-        strsplit(
-          sapply(
-            lapply(strsplit(content, "<a href=")[[1]], function(i) {
-              strsplit(i, "</a>")[[1]]
-            }), 
-            "[[", 1), 
-          ">"), 
-        "[[", 2)
-      
-      fnames <- fnames[grep("^MOD16.*MERRAGMAO$|^Y2|^D|^MOD16.*hdf$", fnames)]
-      fnames <- gsub("_MERRAGMAO", "", fnames)
-
-      # remove temporary file and return output
-      invisible(file.remove(file_out))
-      
-    }
-
-    ## reset 'warn' option (multiple on.exit() calls are ignored and only the last one is executed)
-    options(warn=iw)
+      , silent = TRUE)
+  )
+  
+  ## read online content
+  if (!is_laads) {
+    co = readLines(con)
+    close(con)
     
-    ## format and return    
-    fnames <- gsub(fnames,pattern="/",replacement="")
-    return(fnames)
+    # extract '<a href=...> nodes
+    pttrn = '<a href=\"[[:graph:]]{1,}\">[[:graph:]]{1,}</a>'
+    tmp = sapply(co, function(i) {
+      regmatches(i, regexpr(pttrn, i))
+    })
+    
+    spl1 = sapply(strsplit(unlist(tmp), ">"), "[[", 2)
+    fnames = as.character(sapply(strsplit(spl1, "<"), "[[", 1))
+  } else {
+    tmp = utils::read.csv(con, colClasses = "character") # closes 'con' automatically
+    fnames = tmp$name[grep("[^NOTICE]", tmp$name)]
+  }
+  
+  ## format and return    
+  fnames <- gsub(fnames,pattern="/",replacement="")
+  return(fnames)
 }
 
 
@@ -778,58 +750,46 @@ ModisFileDownloader <- function(x, ...)
                             collapse = "")
             
             ## adapt 'dlmethod' and 'extra' if server == "LPDAAC"
-            if (server %in% c("LPDAAC", "NSIDC")) {
-              if (!opts$dlmethod %in% c("wget", "curl")) {
-
-                cmd = try(system("wget -h", intern = TRUE), silent = TRUE)
-                method = "wget"
-                
-                if (inherits(cmd, "try-error")) {
-                  cmd = try(system("curl -h", intern = TRUE), silent = TRUE)
-                  method = "curl"
-                }
-                
-                if (inherits(cmd, "try-error")) {
-                  stop("Make sure either 'wget' or 'curl' is available in "
-                       , "order to download data from LP DAAC or NSIDC.")
-                }
-              } else {
-                method <- opts$dlmethod
+            if (!opts$dlmethod %in% c("wget", "curl")) {
+              
+              cmd = try(system("wget -h", intern = TRUE), silent = TRUE)
+              method = "wget"
+              
+              if (inherits(cmd, "try-error")) {
+                cmd = try(system("curl -h", intern = TRUE), silent = TRUE)
+                method = "curl"
               }
               
-              # cookies
-              ofl = file.path(tempdir(), ".cookies.txt")
-              if (!file.exists(ofl))
-                jnk = file.create(ofl)
-              on.exit(file.remove(ofl))
-              
-              # wget extras
-              extra <- if (method == "wget") {
-                paste("--user", usr, "--password", pwd
-                      , "--load-cookies", ofl
-                      , "--save-cookies", ofl
-                      , "--keep-session-cookie --no-check-certificate")
-                
-              # curl extras  
-              } else {
-                paste('--user', paste(usr, pwd, sep = ":")
-                      , '-k -L -c', ofl, '-b', ofl)
+              if (inherits(cmd, "try-error")) {
+                stop("Make sure either 'wget' or 'curl' is available in "
+                     , "order to download data.")
               }
-              
-            ## else if server == "NTSG", choose 'wget' as download method  
-            } else if (server == "NTSG") {
-              method <- "wget"
-              extra <- getOption("download.file.extra")
-              
-            ## else use default settings
             } else {
               method <- opts$dlmethod
-              extra <- getOption("download.file.extra")
+            }
+            
+            # cookies
+            ofl = file.path(tempdir(), ".cookies.txt")
+            if (!file.exists(ofl))
+              jnk = file.create(ofl)
+            on.exit(file.remove(ofl))
+            
+            # wget extras
+            extra <- if (method == "wget") {
+              paste("--user", usr, "--password", pwd
+                    , "--load-cookies", ofl
+                    , "--save-cookies", ofl
+                    , "--keep-session-cookie --no-check-certificate")
+              
+              # curl extras  
+            } else {
+              paste('--user', paste(usr, pwd, sep = ":")
+                    , '-k -L -c', ofl, '-b', ofl)
             }
             
             
-            # curl download from LP DAAC or NSIDC
-            out[a] = if (method == "curl" & server %in% c("LPDAAC", "NSIDC")) {
+            # curl download
+            out[a] = if (method == "curl") {
               h = curl::new_handle(CONNECTTIMEOUT = 60L)
               curl::handle_setopt(
                 handle = h,
@@ -1148,18 +1108,13 @@ fixOrphanedHoles = function(x) {
 ## skip unwanted products, see https://github.com/MatMatt/MODIS/issues/22
 skipDuplicateProducts = function(x, quiet = FALSE) {
   
-  products = getProduct()[, 1]
+  products = as.character(getProduct()[, 1])
   
-  dpl = lapply(seq_along(products), function(i) {
-    dpl = grep(products[i], products[-i], value = TRUE)
-    if (length(dpl) > 0) {
-      data.frame(product = products[i], duplicate = dpl)
-    } else NULL
+  dpl = sapply(products, function(i) {
+    any(startsWith(products, i) & products != i)
   })
   
-  dpl = do.call(rbind, dpl)
-  
-  if (x %in% dpl$product) {
+  if (any(names(dpl) == x) && dpl[names(dpl) == x]) {
     if (!quiet) {
       warning("Processing ", x, " only. Use regular expressions (eg. '"
               , x, ".*') to select more than one product.")
