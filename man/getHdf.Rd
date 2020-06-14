@@ -11,9 +11,9 @@
   HdfName,
   begin = NULL,
   end = NULL,
-  tileH = NULL,
-  tileV = NULL,
-  extent = NULL,
+  tileH,
+  tileV,
+  extent,
   collection = NULL,
   checkIntegrity = TRUE,
   forceDownload = TRUE,
@@ -87,7 +87,7 @@ c <- getHdf(product = "MOD13A2", begin = "2016180", end = "2016210",
 c             
        
 # Interactive selection of spatial extent, see getTile()
-d <- getHdf(product = "MOD13A2", begin = "2016180", end = "2016210", extent = getTile())
+d <- getHdf(product = "MOD13A2", begin = "2016180", end = "2016210")
 d
 }
 

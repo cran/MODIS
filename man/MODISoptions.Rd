@@ -43,28 +43,27 @@ to \code{\link{runGdal}} and \code{\link{runMrt}}, defaults to \code{"asIn"}.}
 Since the two pocessing methods do not have common methods, it is suggested 
 to stick with the default settings (see Details).}
 
-\item{resamplingType}{Defaults to \code{"NN"} (Nearest Neightbour). MRT and 
-GDAL both support \code{c('NN', 'CC', 'BIL')}. In addition, GDAL supports 
-\code{cubicspline} and \code{lanczos} and, from \code{GDAL >= 1.10.0} onwards, 
-also \code{mode} and \code{average}.}
+\item{resamplingType}{Defaults to \code{"NN"} (Nearest Neighbour). MRT and 
+GDAL both support \code{c('NN', 'CC', 'BIL')}. GDAL additionally supports all 
+resampling methods listed under \url{https://gdal.org/programs/gdalwarp.html}.}
 
 \item{dataFormat}{\code{character}, defaults to \code{"GTiff"}. One of 
-\code{getOption("MODIS_gdalOutDriver")} (column 'name').}
+\code{getOption("MODIS_gdalOutDriver")$name} (column 'name').}
 
-\item{gdalPath}{\code{character}. Path to gdal bin directory and more 
-relevant for Windows users. Use \code{MODIS:::checkTools("GDAL")} to try to 
-detect it automatically.}
+\item{gdalPath}{\code{character}. Path to gdal bin directory, used to relate 
+writable \code{sf::st_drivers("raster")} to file extensions in case of 
+non-standard formats.}
 
-\item{MODISserverOrder}{\code{character}. Possible options are \code{"LAADS"}
-(default) and \code{"LPDAAC"} (see 'dlmethod' and 'Details'). If only one 
+\item{MODISserverOrder}{\code{character}. Possible options are \code{"LPDAAC"}
+(default) and \code{"LAADS"} (see 'dlmethod' and 'Details'). If only one 
 server is selected, all efforts to download data from the second server 
-available are inhibited.}
+are inhibited.}
 
 \item{dlmethod}{\code{character}, defaults to \code{auto}. See 'method' in 
 \code{\link{download.file}}. On Unix (also Mac?), it is suggested to use 
 \code{"wget"} or, if installed, \code{"aria2"} (supports multi source download).
-In order to download MODIS files from LP DAAC and NSIDC, please note that either
-wget (default) or curl must be installed and made available through the PATH 
+Be aware that in order to download files from any server, either wget (default) 
+or curl must be installed and made available through the system's PATH 
 environmental variable.}
 
 \item{stubbornness}{\code{numeric}. The number of retries after the target 
@@ -96,7 +95,7 @@ see 'Details'.}
 tools (i.e., GDAL and MRT) are installed and reachable through R.}
 
 \item{checkWriteDrivers}{\code{logical}. If \code{TRUE} (default), find write 
-drivers supported by local GDAL installation.}
+drivers supported by \strong{sf} GDAL installation.}
 
 \item{ask}{\code{logical}. If \code{TRUE} (default) and permanent settings 
 file does not exist (see Details), the user is asked whether to create it.}
@@ -138,17 +137,13 @@ default for 'outProj',}
 \item{or a 'resamplingType' that is not \code{"NN"}.}
 }
 
-On Windows, you have to set 'gdalPath' to the location of GDAL executables 
-(i.e., the '.../GDAL../bin' directory). On Unix-alikes, this should not be 
-required unless you want to specify a non-default GDAL installation.
-
 On an unixoid OS, it is suggested to use \code{dlmethod = 'wget'} because it 
 is a reliable tool and, after the change of the 'LP DAAC' datapool from FTP 
 to HTTP (May 2013), \code{dlmethod = 'auto'} seems not to work properly. On 
 Windows, on the other hand, \code{dlmethod = 'auto'} seems to work fine. 
 
-Please note that in order to download MODIS files from LP DAAC and NSIDC, you 
-are required to register for an Earthdata Login Profile 
+Please note that in order to download MODIS files from any available server, 
+you are required to register for an Earthdata Login Profile 
 (\url{https://urs.earthdata.nasa.gov/users/new}) and create a read-only 
 .netrc file in your home directory containing the Earthdata server address as 
 well as your login credentials. An automated solution for the creation of a 

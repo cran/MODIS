@@ -17,24 +17,23 @@
 #' \code{\link{CRS}}. As for \code{\link{runMrt}}, please consult the MRT manual. 
 #' Since the two pocessing methods do not have common methods, it is suggested 
 #' to stick with the default settings (see Details).
-#' @param resamplingType Defaults to \code{"NN"} (Nearest Neightbour). MRT and 
-#' GDAL both support \code{c('NN', 'CC', 'BIL')}. In addition, GDAL supports 
-#' \code{cubicspline} and \code{lanczos} and, from \code{GDAL >= 1.10.0} onwards, 
-#' also \code{mode} and \code{average}.
+#' @param resamplingType Defaults to \code{"NN"} (Nearest Neighbour). MRT and 
+#' GDAL both support \code{c('NN', 'CC', 'BIL')}. GDAL additionally supports all 
+#' resampling methods listed under \url{https://gdal.org/programs/gdalwarp.html}.
 #' @param dataFormat \code{character}, defaults to \code{"GTiff"}. One of 
-#' \code{getOption("MODIS_gdalOutDriver")} (column 'name').
-#' @param gdalPath \code{character}. Path to gdal bin directory and more 
-#' relevant for Windows users. Use \code{MODIS:::checkTools("GDAL")} to try to 
-#' detect it automatically.
-#' @param MODISserverOrder \code{character}. Possible options are \code{"LAADS"}
-#' (default) and \code{"LPDAAC"} (see 'dlmethod' and 'Details'). If only one 
+#' \code{getOption("MODIS_gdalOutDriver")$name} (column 'name').
+#' @param gdalPath \code{character}. Path to gdal bin directory, used to relate 
+#' writable \code{sf::st_drivers("raster")} to file extensions in case of 
+#' non-standard formats.
+#' @param MODISserverOrder \code{character}. Possible options are \code{"LPDAAC"}
+#' (default) and \code{"LAADS"} (see 'dlmethod' and 'Details'). If only one 
 #' server is selected, all efforts to download data from the second server 
-#' available are inhibited.
+#' are inhibited.
 #' @param dlmethod \code{character}, defaults to \code{auto}. See 'method' in 
 #' \code{\link{download.file}}. On Unix (also Mac?), it is suggested to use 
 #' \code{"wget"} or, if installed, \code{"aria2"} (supports multi source download).
-#' In order to download MODIS files from LP DAAC and NSIDC, please note that either
-#' wget (default) or curl must be installed and made available through the PATH 
+#' Be aware that in order to download files from any server, either wget (default) 
+#' or curl must be installed and made available through the system's PATH 
 #' environmental variable.
 #' @param stubbornness \code{numeric}. The number of retries after the target 
 #' server has refused a connection. Higher values increase the chance of getting 
@@ -58,7 +57,7 @@
 #' @param checkTools \code{logical}, defaults to \code{TRUE}. Check if external 
 #' tools (i.e., GDAL and MRT) are installed and reachable through R.
 #' @param checkWriteDrivers \code{logical}. If \code{TRUE} (default), find write 
-#' drivers supported by local GDAL installation.
+#' drivers supported by \strong{sf} GDAL installation.
 #' @param ask \code{logical}. If \code{TRUE} (default) and permanent settings 
 #' file does not exist (see Details), the user is asked whether to create it.
 #' 
@@ -95,17 +94,13 @@
 #' \item{or a 'resamplingType' that is not \code{"NN"}.}
 #' }
 #' 
-#' On Windows, you have to set 'gdalPath' to the location of GDAL executables 
-#' (i.e., the '.../GDAL../bin' directory). On Unix-alikes, this should not be 
-#' required unless you want to specify a non-default GDAL installation.
-#' 
 #' On an unixoid OS, it is suggested to use \code{dlmethod = 'wget'} because it 
 #' is a reliable tool and, after the change of the 'LP DAAC' datapool from FTP 
 #' to HTTP (May 2013), \code{dlmethod = 'auto'} seems not to work properly. On 
 #' Windows, on the other hand, \code{dlmethod = 'auto'} seems to work fine. 
 #' 
-#' Please note that in order to download MODIS files from LP DAAC and NSIDC, you 
-#' are required to register for an Earthdata Login Profile 
+#' Please note that in order to download MODIS files from any available server, 
+#' you are required to register for an Earthdata Login Profile 
 #' (\url{https://urs.earthdata.nasa.gov/users/new}) and create a read-only 
 #' .netrc file in your home directory containing the Earthdata server address as 
 #' well as your login credentials. An automated solution for the creation of a 
@@ -300,17 +295,12 @@ MODISoptions <- function(localArcPath, outDirPath, pixelSize, outProj,
   if (!missing(gdalPath))
   {
     opt$gdalPath <- correctPath(gdalPath)
-    if(all(!grepl("gdalinfo", dir(opt$gdalPath))))
-    {
-      stop(paste0("The 'gdalPath' you have provided '",normalizePath(opt$gdalPath,"/",FALSE) ,"' does not contain any gdal utilities, make sure to address the folder with GDAL executables (i.e.: gdalinfo)!"))
-    }
   }
   opt$gdalPath <- correctPath(opt$gdalPath)
-  options(MODIS_gdalPath=opt$gdalPath) # needs to be exportet now as it is required by checkTools a few lines bellow (uses combineOptions())! Maybe not the best solution!
-  
+
   if(is.null(opt$MODISserverOrder))
   {
-    opt$MODISserverOrder <- c("LAADS", "LPDAAC")
+    opt$MODISserverOrder <- c("LPDAAC", "LAADS")
   }
   if (!missing(MODISserverOrder))
   {
@@ -337,12 +327,11 @@ MODISoptions <- function(localArcPath, outDirPath, pixelSize, outProj,
   if(checkTools)
   {
     # GDAL
-    isOk <- checkGdalDriver(path=opt$gdalPath)
+    isOk <- checkHdf4Driver()
     if (isOk) 
     {
       opt$gdalOk  <- TRUE
-      opt2 = opt; opt2 = opt2[names(opt) != "quiet"]
-      gdalVersion <- do.call("checkTools", c(list(tool = "GDAL", quiet = TRUE), opt2))$GDAL$version
+      gdalVersion <- do.call("checkTools", c(list(tool = "GDAL", quiet = TRUE)))$GDAL$version
     } else
     {
       opt$gdalOk  <- FALSE
@@ -350,8 +339,7 @@ MODISoptions <- function(localArcPath, outDirPath, pixelSize, outProj,
     }
     
     # MRT
-    opt2 = opt; opt2 = opt2[names(opt) != "quiet"]
-    mrt <- do.call("checkTools", c(list(tool = "MRT", quiet = TRUE), opt2))$MRT
+    mrt <- do.call("checkTools", c(list(tool = "MRT", quiet = TRUE)))$MRT
     if(mrt$MRT)
     {
       opt$mrtOk  <- TRUE
@@ -371,8 +359,8 @@ MODISoptions <- function(localArcPath, outDirPath, pixelSize, outProj,
     {
       opt$mrtOk <- FALSE
     }
-    gdalVersion <- "Not checked, run 'MODISoptions(checkPackages=TRUE)'"
-    mrtVersion  <- "Not checked, run 'MODISoptions(checkPackages=TRUE)'"
+    gdalVersion <- "Not checked."
+    mrtVersion  <- "Not checked."
   }   
   
   if(!missing(dataFormat))
@@ -386,7 +374,7 @@ MODISoptions <- function(localArcPath, outDirPath, pixelSize, outProj,
   
   if(checkTools & opt$gdalOk & checkWriteDrivers)
   {
-    opt$gdalOutDriver <- gdalWriteDriver(renew = FALSE, quiet = FALSE, gdalPath=opt$gdalPath,outDirPath=opt$outDirPath)
+    opt$gdalOutDriver <- getGdalWriteDrivers()
   }
   
   if(!missing(cellchunk))
@@ -467,10 +455,7 @@ MODISoptions <- function(localArcPath, outDirPath, pixelSize, outProj,
     write('  ', filename)    
     write('#########################', filename)
     write('# 5.) Set path to GDAL _bin_ directory', filename)
-    write('# More related to Windows, but also to other OS in case of a non standard location of GDAL', filename)
-    write('# ON WINDOWS install \'OSGeo4W\' (recommanded) or \'FWTools\'', filename)
-    write('# consult \'?MODISoptions\' for more details', filename)        
-    write('# Run: \'MODIS:::checkTools()\' to try to autodetect location.', filename)
+    write('# Optional, used to relate writable sf::st_drivers("raster") to file extensions for non-standard formats.', filename)        
     write('# Example (USE SINGLE FORWARD SLASH \'/\'!):', filename)
     write('# gdalPath <- \'C:/OSGeo4W/bin/\'', filename)
     write('  ', filename)

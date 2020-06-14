@@ -1,22 +1,35 @@
+if (!isGeneric("getTile")) {
+  setGeneric(
+    "getTile"
+    , function(
+      x
+      , tileH
+      , tileV
+      , ...
+    ) {
+      standardGeneric("getTile")
+    }
+  )
+}
+
 #' Get MODIS Tile ID(s)
 #' 
 #' @description 
 #' Get MODIS tile ID(s) for a specific geographic area.
 #' 
-#' @param x Extent information, see Details. Ignored if \code{tileH} and
-#' \code{tileV} are specified.
+#' @param x Extent information, see Details.
 #' @param tileH,tileV \code{numeric} or \code{character}. Horizontal and 
 #' vertical tile number(s) of the 
 #' \href{https://nsidc.org/data/docs/daac/mod10_modis_snow/landgrid.html}{MODIS Sinusoidal grid}
-#' (e.g., \code{tileH = 1:5}). If specified, no cropping is performed and the 
-#' full tile(s) (if more than one then also mosaicked) is (are) processed! 
+#' (e.g., \code{tileH = 1:5}). Cropping is disabled here and full tiles (if more 
+#' than one then also mosaicked) are processed instead. Ignored if \code{x} is 
+#' specified.
 #' @param mode Interactive selection mode as \code{character}. Available options 
 #' are \code{"click"} (default) and \code{"draw"} that trigger interactive MODIS 
-#' tile selection and free feature drawing, respectively. Ignored if any of 'x' 
-#' or 'tileH,tileV' is NOT missing.
-#' @param ... Additional arguments passed to \code{\link{MODISoptions}}. Here, 
-#' only 'outProj' and 'pixelSize' are relevant, and this only if 'x' is an 
-#' object of class \code{character}, \code{map}, \code{Extent} or \code{bbox}.
+#' tile selection and free feature drawing, respectively. Triggered only if 'x' 
+#' and tile IDs are omitted.
+#' @param ... Additional arguments passed to \code{\link{MODISoptions}}, see
+#' Details.
 #' 
 #' @return 
 #' A \code{MODISextent} object.
@@ -34,18 +47,21 @@
 #' easy data access is granted through \code{\link{getData}}. 
 #' 
 #' @details 
-#' If \code{x} is of class (see Examples for use cases)
+#' Unless stated otherwise in the following, target 'outProj' and 'pixelSize' 
+#' are carried over from \code{\link[MODIS]{MODISoptions}}.
+#' 
+#' If 'x' is of class (see Examples for use cases)
 #' \tabular{ll}{
 #'   \code{missing}:\cr
-#'   \tab If 'tileH,tileV' are specified, 'x' will be ignored. If no such tile 
-#'   indices are provided and 'x' is missing, a viewer window pops up that 
-#'   allows interactive tile selection from the global MODIS Sinusoidal grid or, 
-#'   if \code{mode = "draw"}, free feature drawing.\cr
+#'   \tab If tile IDs (see Arguments) are also missing, a viewer window 
+#'   pops up that allows for interactive tile selection from the global MODIS 
+#'   Sinusoidal grid or, if \code{mode = "draw"}, free feature drawing.\cr
 #'   \cr 
 #'   \code{character}:\cr
-#'   \tab Either the country name of a \code{map} object (see \code{\link{map}})
-#'   or a valid file path of a raster image or ESRI shapefile (shp). The former 
-#'   approach also supports pattern matching via regular expressions.\cr
+#'   \tab The country name of a \code{map} object (see \code{\link{map}}) with 
+#'   pattern matching via regular expressions enabled. Alternatively, a valid 
+#'   file path to a single ESRI shapefile (.shp) or an image readable by 
+#'   \code{\link[raster]{raster}}.\cr
 #'   \cr
 #'   \code{Raster*}:\cr
 #'   \tab Spatial extent, resolution, and projection of the specified 
@@ -55,12 +71,16 @@
 #'   \href{http://spatialreference.org/ref/epsg/wgs-84/}{EPSG:4326} is assumed.\cr
 #'   \cr
 #'   \code{Extent}, \code{bbox}:\cr
-#'   \tab Boundary coordinates from \code{Extent} and \code{bbox} objects are 
-#'   assumed to be in \href{http://spatialreference.org/ref/epsg/wgs-84/}{EPSG:4326} 
-#'   as such objects have no projection information attached.\cr
+#'   \tab Boundary coordinates from \code{Extent} objects are generally assumed 
+#'   to be in \href{http://spatialreference.org/ref/epsg/wgs-84/}{EPSG:4326} as 
+#'   such objects have no projection information attached. The same applies for 
+#'   'bbox' objects lacking CRS information.\cr
+#'   \cr
+#'   \code{sf}, \code{Spatial}:\cr
+#'   \tab Except for resolution, same as for \code{Raster*}.\cr
 #'   \cr
 #'   Other:\cr
-#'   \tab \code{Spatial}, \code{sf}, or \code{map} object.
+#'   \tab A \code{map} object.
 #' }
 #' 
 #' @examples 
@@ -68,6 +88,7 @@
 #' # ex 1 ############
 #' # interactive tile selection
 #' getTile()
+#' getTile(mode = "draw")
 #' }
 #' 
 #' # ex 2: Spatial (taken from ?rgdal::readOGR) ############
@@ -112,232 +133,473 @@
 #' 
 #' @export getTile
 #' @name getTile
-getTile <- function(x, tileH = NULL, tileV = NULL, mode = c("click", "draw"), ...) {
- 
-  opts = combineOptions(...)
-  
-  # if 'x' is a Raster*/Spatial* and has a different CRS, the information is added here
-  target <- NULL  
-  
-  ## if inputs are missing, select tile(s) interactively
-  if (missing(x) & (is.null(tileH) | is.null(tileV))) {
-    x = mapSelect(mode = mode[1])
-    tileH = x$h; tileV = x$v
-    fromMap = TRUE
-  } else {
-    fromMap = FALSE
+
+### 0 INTERACTIVE ====
+
+#' @aliases getTile,missing,missing,missing-method
+#' @rdname getTile
+methods::setMethod(
+  "getTile"
+  , methods::signature(
+    x = "missing"
+    , tileH = "missing"
+    , tileV = "missing"
+  )
+  , function(
+    mode = c("click", "draw")
+    , ...
+  ) {
+    mode = match.arg(mode)
+    x = mapSelect(mode = mode)
+    # x = x[order(x$h, x$v), ]
+    
+    tiles = paste0(
+      "h", sprintf("%02d", x$h)
+      , "v", sprintf("%02d", x$v)
+    )
+    
+    methods::new(
+      "MODISextent"
+      , tile = tiles
+      , tileH = x$h
+      , tileV = x$v
+      , extent = raster::extent(x)
+      , system = "MODIS"
+      , target = NULL
+    )
   }
-  
-  # ## recycle tile lengths to enable creation of tile pairs
-  # if ((len_h <- length(tileH)) != (len_v <- length(tileV))) {
-  #   if (len_h < len_v) {
-  #     if (len_v %% len_h > 0) {
-  #       stop("'tileV' is not a multiple of 'tileH'.")
-  #     }
-  #     tileH = rep(tileH, len_v / len_h)
-  #   } else {
-  #     if (len_h %% len_v > 0) {
-  #       stop("'tileH' is not a multiple of 'tileV'.")
-  #     }
-  #     tileV = rep(tileV, len_h / len_v)
-  #   }
-  # }
-  
-  if (all(!is.null(tileH), !is.null(tileV))) {
-    if (!is.numeric(tileH)) tileH <- as.numeric(tileH)
-    if (!is.numeric(tileV)) tileV <- as.numeric(tileV)
-    
-    tt <- tiletable[(tiletable$ih %in% tileH) &
-                      (tiletable$iv %in% tileV) & (tiletable$lon_min > -999), ]
+)
 
-    x <- raster::extent(c(min(tt$lon_min), max(tt$lon_max)
-                          , min(tt$lat_min), max(tt$lat_max)))
+mapSelect = function(
+  mode = c("click", "draw")
+) {
+  
+  ### . click mode ----
+  
+  if (mode[1] == "click") {
     
-    tt$iv <- sprintf("%02d", tt$iv)
-    tt$ih <- sprintf("%02d", tt$ih)
+    ## hide invalid tiles
+    lon_min = lat_min = NULL
+    tt_sbs = subset(
+      tiletable
+      , lon_min == -999 | 
+        lat_min == -99
+    )
     
-    tileH <- sprintf("%02d",tileH)
-    tileV <- sprintf("%02d",tileV)
+    sr_tls = paste(sr$h, sr$v)
+    tt_tls = paste(tt_sbs$ih, tt_sbs$iv)
     
-    tilesSUB <- as.character(apply(tt,1, function(x) {
-      paste0("h", x[2], "v",  x[1])
-    }))
-    tiles <- as.character(sapply(tileH, function(x){paste0("h", x, "v", tileV)}))
+    ftrs = mapedit::selectFeatures(
+      sr[!sr_tls %in% tt_tls, ]
+    )
     
-    if (!all(tiles %in% tilesSUB))  # all possible tiles vs all available
-    {
-      rem <- paste0(tiles[!tiles %in% tilesSUB],collapse=", ")
-      cat(paste0("The following 'tiles' do not exist:\n",rem,"\n"))
-      tiles <- tilesSUB
-      tileH <- unique(tt$ih)
-      tileV <- unique(tt$iv)
+    ## fail safe: no tile selected
+    if (nrow(ftrs) == 0) {
+      stop("No feature selected.")
     }
+    
+    return(ftrs)
+    
+    
+    ### . draw mode ----
+    
   } else {
+    drawing = try(
+      mapedit::drawFeatures()
+      , silent = TRUE
+    )
     
-    prj <- sp::CRS(sp::proj4string(sr))
-    oprj = sp::CRS("+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +a=6371007.181 +b=6371007.181 +units=m +no_defs")
-
-    # filename string to Raster/vector conversion
-    if(inherits(x,"character") & length(x)==1) # length>1 it should be only a mapname for maps::map
-    {
-      if (raster::extension(x)=='.shp')
-      {
-        x <- shapefile(x)
-      } else 
-      {
-        if (file.exists(x))
-        {
-          x <- raster(x)
-        }
-      }
-    }  
-    
-    # character (country name of MAP) to maps::map conversion     
-    if (inherits(x, "character"))
-    {
-      try(testm <- maps::map("worldHires", x, plot = FALSE),silent = TRUE)
-      if (!exists("testm"))
-      {
-        stop(paste0("Country name not valid. Check availability/spelling, i.e. try if it works with: map('worldHires,'",x, "'), or use '?search4map' function"))
-      }
-      x <- maps::map("worldHires", x, plot = FALSE, fill=TRUE)
+    ## fail safe: shape not closed
+    if (inherits(drawing, "try-error")) {
+      stop("Shape needs to be closed.")
     }
     
-    # this needs to be done in order to use rgdal:::over to intersect geometies 
-    if (inherits(x, c("Raster", "Spatial"))) {
-      
-      # if coord. ref. is missing, set to EPSG:4326
-      target <- list(outProj = raster::projection(x)
-                     , extent = if (pts_1 <- (inherits(x, "SpatialPoints") & length(x) == 1L)) {
-                       NULL
-                     } else {
-                       raster::extent(x)
-                     }, pixelSize = NULL) 
-      
-      if (inherits(x, "Raster"))
-        target$pixelSize <- raster::res(x)
-      
-      # if required, spTransform() extent object
-      if (!sp::identicalCRS(x, sr) & !is.na(target$outProj)) {
-        x <- if (inherits(x, "Raster")) {
-          raster::projectExtent(x, prj)
-        } else {
-          sp::spTransform(x, prj)
-        }
-      } else if (is.na(target$outProj)) {
-        target$outProj <- prj@projargs
-      }
-      
-    # 'sf' method  
-    } else if (inherits(x, "sf")) {
-      
-      pts_1 <- grepl("POINT", sf::st_geometry_type(x))[1] & nrow(x) == 1L
-      
-      if (!fromMap) {
-        target <- list(outProj = sf::st_crs(x)$proj4string
-                       , extent = if (pts_1) NULL else raster::extent(sf::st_bbox(x)[c(1, 3, 2, 4)])
-                       , pixelSize = NULL)
-        
-        x =  methods::as(x, "Spatial")
-        if (!sp::identicalCRS(x, sr)) {
-          x <- sp::spTransform(x, prj)
-        }
-        
-      } else {
-        x <- methods::as(x, "Spatial")
-      }
+    suppressMessages(sr[drawing, ])
+  }
+}
 
-    # 'map' | 'Extent' | 'bbox' method  
-    } else if (inherits(x, c("map", "Extent", "bbox"))) {
-      
-      # convert to polygons
-      if (inherits(x, "map")) {
-        spy = x = maptools::map2SpatialPolygons(x, x$names, prj, checkHoles = TRUE)
+
+### 1 TILES ==== 
+
+setClassUnion("charORnum", c("character", "numeric"))
+
+#' @aliases getTile,missing,charORnum,charORnum-method
+#' @rdname getTile
+methods::setMethod(
+  "getTile"
+  , methods::signature(
+    x = "missing"
+    , tileH = "charORnum"
+    , tileV = "charORnum"
+  )
+  , function(
+    tileH
+    , tileV
+    , ...
+  ) {
+    
+    tileH = as.integer(tileH)
+    tileV = as.integer(tileV)
+    
+    ih = iv = lon_min = lat_min = NULL
+    tt = subset(
+      tiletable
+      , ih %in% tileH &
+        iv %in% tileV & 
+        lon_min > -999 & 
+        lat_min > -99
+    )
+    
+    ext = raster::extent(
+      c(
+        min(tt$lon_min)
+        , max(tt$lon_max)
+        , min(tt$lat_min)
+        , max(tt$lat_max)
+      )
+    )
+    
+    tt$iv = sprintf("%02d", tt$iv)
+    tt$ih = sprintf("%02d", tt$ih)
+    
+    tileH = sprintf("%02d", tileH)
+    tileV = sprintf("%02d", tileV)
+    
+    tiles_sub = paste0("h", tt$ih, "v", tt$iv)
+    
+    hs = rep(tileH, each = length(tileV))
+    vs = rep(tileV, times = length(tileH))
+    tiles = paste0("h", hs, "v", vs)
+    
+    # all possible tiles vs. all available
+    navl = !tiles %in% tiles_sub
+    if (any(navl)) {
+      warning(
+        "The following tiles do not exist:\n"
+        , paste(
+          sort(
+            tiles[navl]
+          )
+          , collapse = ", "
+        )
+        , "\n"
+      )
+      tiles = tiles_sub
+      tileH = unique(tt$ih)
+      tileV = unique(tt$iv)
+    }
+    
+    methods::new(
+      "MODISextent"
+      , tile = tiles
+      , tileH = as.integer(tileH)
+      , tileV = as.integer(tileV)
+      , extent = ext
+      , system = "MODIS"
+      , target = NULL
+    )
+  }
+)
+
+
+### 2 CHARACTER ====
+
+#' @aliases getTile,character-method
+#' @rdname getTile
+methods::setMethod(
+  "getTile"
+  , methods::signature(
+    x = "character"
+  )
+  , function(
+    x
+    , ...
+  ) {
+    
+    if (length(x) == 1 && file.exists(x)) { 
+      if (raster::extension(x) == ".shp") {
+        getTile(sf::st_read(x), ...)
       } else {
-        if (inherits(x, "bbox")) {
-          tmp = as.numeric(x)[c(1, 3, 2, 4)]
-          x = raster::extent(tmp)
-        }
-        
-        spy = as(x, "SpatialPolygons"); sp::proj4string(spy) = prj@projargs
+        getTile(raster::raster(x), ...)
+      }
+    } else {
+      x.bu = x
+      on.exit(rm(x.bu))
+      
+      x = try(
+        maps::map("worldHires", x, plot = FALSE, fill = TRUE)
+        , silent = TRUE
+      )
+      
+      if (inherits(x, "try-error")) {
+        stop(
+          "Country name not valid. Check availability with map('worldHires, '"
+          , x.bu
+          , "'), or use '?search4map' function"
+        )
       }
       
-      spy = sp::spTransform(spy, if (opts$outProj == "asIn") {
-        oprj 
+      getTile(
+        x
+        , ...
+      )
+    }
+  }
+)
+
+
+### 3 RASTER ====
+
+#' @aliases getTile,Raster-method
+#' @rdname getTile
+methods::setMethod(
+  "getTile"
+  , methods::signature(
+    x = "Raster"
+  )
+  , function(
+    x
+    , ...
+  ) {
+    
+    # if coord. ref. is missing, set to EPSG:4326
+    if (is.na(raster::projection(x))) {
+      raster::projection(x) = raster::projection(sr)
+    }
+    
+    target = list(
+      outProj = sf::st_crs(x)
+      , extent = raster::extent(x)
+      , pixelSize = raster::res(x)
+    )
+    
+    # if required, project extent object
+    if (sf::st_crs(x) != sf::st_crs(sr)) {
+      x = raster::projectExtent(x, sr)
+    }
+    
+    selected = suppressWarnings(
+      suppressMessages(
+        sf::st_crop(sr, x)
+      )
+    )
+    
+    if (nrow(selected) == 0) {
+      stop("Please assign a valid CRS to 'x' as it doesn't seem to be in EPSG:4326.")
+    }
+    
+    tiles = paste0(
+      "h"
+      , sprintf("%02d", selected$h)
+      , "v"
+      , sprintf("%02d", selected$v)
+    )
+    
+    methods::new(
+      "MODISextent"
+      , tile = tiles
+      , tileH = selected$h
+      , tileV = selected$v
+      , extent = raster::extent(x)
+      , system = "MODIS"
+      , target = target
+    )
+  }
+)
+
+
+### 4 MAP ====
+
+methods::setOldClass("map")
+
+#' @aliases getTile,map-method
+#' @rdname getTile
+methods::setMethod(
+  "getTile"
+  , methods::signature(
+    x = "map"
+  )
+  , function(
+    x
+    , ...
+  ) {
+    
+    opts = combineOptions(...)
+
+    x = sf::st_transform(
+      sf::st_as_sf(x)
+      , if (opts$outProj == "asIn") {
+        sf::st_crs("+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +R=6371007.181 +units=m +no_defs") 
       } else {
         if (!is.na(suppressWarnings(as.integer(opts$outProj)))) {
           opts$outProj = paste0("+init=epsg:", as.integer(opts$outProj))
         }
-        sp::CRS(opts$outProj)
+        sf::st_crs(opts$outProj)
       })
-      
-      target <- list(outProj = opts$outProj
-                     , extent = raster::extent(spy)
-                     , pixelSize = opts$pixelSize)
+    
+    getTile(
+      sf::st_as_sf(x)
+      , pixelSize = opts$pixelSize
+    )
+  }
+)
+
+
+### 4 BOUNDING BOX ====
+
+### 4.0 Extent ----
+
+#' @aliases getTile,Extent-method
+#' @rdname getTile
+methods::setMethod(
+  "getTile"
+  , methods::signature(
+    x = "Extent"
+  )
+  , function(
+    x
+    , ...
+  ) {
+    
+    getTile(
+      sf::st_bbox(
+        x
+        , crs = sf::st_crs(sr)
+      )
+      , ...
+    )
+  }
+)
+
+
+### 4.1 bbox ----
+
+methods::setOldClass("bbox")
+
+#' @aliases getTile,bbox-method
+#' @rdname getTile
+methods::setMethod(
+  "getTile"
+  , methods::signature(
+    x = "bbox"
+  )
+  , function(
+    x
+    , ...
+  ) {
+    
+    opts = combineOptions(...)
+    
+    x = sf::st_as_sfc(x)
+    
+    # if coord. ref. is missing, set to EPSG:4326
+    if (is.na(sf::st_crs(x))) {
+      sf::st_crs(x) = sf::st_crs(sr)
     }
     
-    ## capture errors related to orphaned holes and self-intersection
-    if (inherits(x, 'Spatial')) {
-      isValid = try(rgeos::gIsValid(x, reason = TRUE), silent = TRUE)
-      if (inherits(isValid, "try-error")) {
-        x = fixOrphanedHoles(x)
-      } else if (inherits(isValid, "character")) {
-        if (grepl("Self-intersection", isValid)) {
-          x = suppressWarnings(
-            rgeos::gBuffer(x, byid = TRUE, width = 0)
-          )
+    x = sf::st_transform(
+      x
+      , if (opts$outProj == "asIn") {
+        sf::st_crs("+proj=sinu +lon_0=0 +x_0=0 +y_0=0 +R=6371007.181 +units=m +no_defs") 
+      } else {
+        if (!is.na(suppressWarnings(as.integer(opts$outProj)))) {
+          opts$outProj = paste0("+init=epsg:", as.integer(opts$outProj))
         }
-      }
-    }
+        sf::st_crs(opts$outProj)
+      })
     
-    if (inherits(x, "Spatial")) {
-      selected = sr[x, ]
-    } else {
-      selected = raster::crop(sr, x)
-      if (is.null(selected)) {
-        stop("Please assign a valid CRS to 'x' as it doesn't seem to be in EPSG:4326.")
-      }
-    }
-    
-    tileH  <- unique(selected@data$h)
-    tileV  <- unique(selected@data$v)
-    
-    tiles <- as.character(apply(selected@data,1,function(x) {paste("h",sprintf("%02d",x[2]),"v",sprintf("%02d",x[3]),sep="")}))
-    
-    if (exists("pts_1")) {
-      if (pts_1) {
-        tt <- tiletable[(tiletable$ih %in% tileH) &
-                          (tiletable$iv %in% tileV) & (tiletable$lon_min > -999), ]
-        
-        x <- raster::extent(c(min(tt$lon_min), max(tt$lon_max)
-                              , min(tt$lat_min), max(tt$lat_max)))
-      }
-    }
+    getTile(
+      sf::st_as_sf(x)
+      , pixelSize = opts$pixelSize
+    )
   }
-  
-  result = methods::new("MODISextent"
-                        , tile = tiles
-                        , tileH = as.integer(tileH)
-                        , tileV = as.integer(tileV)
-                        , extent = raster::extent(x)
-                        , system = "MODIS"
-                        , target = target)
-  
-  return(result)
-}
+)
 
 
+### 5 SHAPEFILE ====
 
-mapSelect <- function(mode = c("click", "draw")) {
-  
-  grd <- sf::st_as_sf(sr, quiet = TRUE)
-  
-  sel = if (mode[1] == "click") {
-    mapedit::selectFeatures(grd)
-  } else {
-    mapedit::drawFeatures(mode = mode[1])
+### 5.1 sp ----
+
+#' @aliases getTile,Spatial-method
+#' @rdname getTile
+methods::setMethod(
+  "getTile"
+  , methods::signature(
+    x = "Spatial"
+  )
+  , function(
+    x
+    , ...
+  ) {
+    
+    getTile(sf::st_as_sf(x), ...)
   }
+)
 
-  return(sel)
-}
 
+### 5.2 sf ----
+
+#' @aliases getTile,sf-method
+#' @rdname getTile
+methods::setMethod(
+  "getTile"
+  , methods::signature(
+    x = "sf"
+  )
+  , function(
+    x
+    , ...
+  ) {
+    
+    opts = combineOptions(...)
+    
+    # if coord. ref. is missing, set to EPSG:4326
+    if (is.na(sf::st_crs(x))) {
+      sf::st_crs(x) = sf::st_crs(sr)
+    }
+    
+    # single-point feature -> take full tile extent
+    pts_1 = grepl("POINT", sf::st_geometry_type(x))[1] && nrow(x) == 1L
+    if (pts_1) {
+      # TODO: invoke tile method for single-point features
+    }
+    
+    target = list(
+      outProj = sf::st_crs(x)
+      , extent = if (!pts_1) {
+        raster::extent(x)
+      }
+      , pixelSize = opts$pixelSize
+    )
+    
+    # if required, project extent object
+    if (sf::st_crs(x) != sf::st_crs(sr)) {
+      x = sf::st_transform(x, sf::st_crs(sr))
+    }
+    
+    selected = suppressMessages(
+      sf::st_filter(sr, x)
+    )
+    
+    if (nrow(selected) == 0) {
+      stop("Please assign a valid CRS to 'x' as it doesn't seem to be in EPSG:4326.")
+    }
+    
+    tiles = paste0(
+      "h"
+      , sprintf("%02d", selected$h)
+      , "v"
+      , sprintf("%02d", selected$v)
+    )
+    
+    methods::new(
+      "MODISextent"
+      , tile = tiles
+      , tileH = selected$h
+      , tileV = selected$v
+      , extent = raster::extent(x)
+      , system = "MODIS"
+      , target = target
+    )
+  }
+)

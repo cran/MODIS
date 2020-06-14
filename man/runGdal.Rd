@@ -9,9 +9,9 @@ runGdal(
   collection = NULL,
   begin = NULL,
   end = NULL,
-  extent = NULL,
-  tileH = NULL,
-  tileV = NULL,
+  extent,
+  tileH,
+  tileV,
   SDSstring = NULL,
   job = NULL,
   checkIntegrity = TRUE,
@@ -48,9 +48,7 @@ output folder. If not specified, it is created in 'PRODUCT.COLLECTION_DATETIME'.
 \item{overwrite}{\code{logical}, defaults to \code{FALSE}. Determines 
 whether or not to overwrite existing SDS output files.}
 
-\item{maskValue}{\code{numeric}. Value to be excluded when resampling (via gdalwarp -srcnodata argument).
-This allows non-data values, for example water, to be ignored and thus not effect the final data.
-NOTE: this argument will be ignored if the original SDS has a No Data value defined.}
+\item{maskValue}{Currently ignored.}
 
 \item{...}{Additional arguments passed to \code{\link{MODISoptions}}, e.g. 
 'wait'. Permanent settings for these arguments are temporarily overridden.}
@@ -93,19 +91,12 @@ define the area of interest, and \code{outProj} and \code{pixelSize} are
 \code{'asIn'}, the result is only converted from multilayer-HDF to 
 \code{dataFormat}, default "GeoTiff" (\code{\link{MODISoptions}}).\cr
 }
-\note{
-You need to have \href{https://gdal.org/}{GDAL} installed on your system.\cr\cr
-On Unix-alkes, install \code{gdal-bin}.\cr
-On Windows, you need to install GDAL through \href{http://trac.osgeo.org/osgeo4w/}{OSGeo4W} 
-or \href{http://fwtools.maptools.org/}{FWTools} since the standard GDAL does 
-not support HDF4 format.
-}
 \examples{
 \dontrun{
 # LST in Austria
 runGdal( product="MOD11A1", extent="austria", begin="2010001", end="2010005", SDSstring="101")
 
-# LST with interactiv area selection
+# LST with interactive tile selection
 runGdal( product="MOD11A1", begin="2010001", end="2010005", SDSstring="101")
 
 ### outProj examples
@@ -115,7 +106,7 @@ runGdal( job="LSTaustria", product="MOD11A1", extent="Austria", begin="2010001",
          SDSstring="101", outProj="EPSG:32634")
 
 runGdal( job="LSTaustria", product="MOD11A1", extent="Austria", begin="2010001", end="2010005",
-         SDSstring="101", outProj="32634")
+         SDSstring="101", outProj=32634)
 
 runGdal( job="LSTaustria", product="MOD11A1", extent="Austria", begin="2010001", end="2010005",
          SDSstring="101", outProj="+proj=utm +zone=34 +ellps=WGS84 +datum=WGS84 +units=m +no_defs")

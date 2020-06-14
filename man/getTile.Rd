@@ -2,28 +2,59 @@
 % Please edit documentation in R/getTile.R
 \name{getTile}
 \alias{getTile}
+\alias{getTile,missing,missing,missing-method}
+\alias{getTile,missing,charORnum,charORnum-method}
+\alias{getTile,character,ANY,ANY-method}
+\alias{getTile,character-method}
+\alias{getTile,Raster,ANY,ANY-method}
+\alias{getTile,Raster-method}
+\alias{getTile,map,ANY,ANY-method}
+\alias{getTile,map-method}
+\alias{getTile,Extent,ANY,ANY-method}
+\alias{getTile,Extent-method}
+\alias{getTile,bbox,ANY,ANY-method}
+\alias{getTile,bbox-method}
+\alias{getTile,Spatial,ANY,ANY-method}
+\alias{getTile,Spatial-method}
+\alias{getTile,sf,ANY,ANY-method}
+\alias{getTile,sf-method}
 \title{Get MODIS Tile ID(s)}
 \usage{
-getTile(x, tileH = NULL, tileV = NULL, mode = c("click", "draw"), ...)
+\S4method{getTile}{missing,missing,missing}(mode = c("click", "draw"), ...)
+
+\S4method{getTile}{missing,charORnum,charORnum}(x, tileH, tileV, ...)
+
+\S4method{getTile}{character,ANY,ANY}(x, tileH, tileV, ...)
+
+\S4method{getTile}{Raster,ANY,ANY}(x, tileH, tileV, ...)
+
+\S4method{getTile}{map,ANY,ANY}(x, tileH, tileV, ...)
+
+\S4method{getTile}{Extent,ANY,ANY}(x, tileH, tileV, ...)
+
+\S4method{getTile}{bbox,ANY,ANY}(x, tileH, tileV, ...)
+
+\S4method{getTile}{Spatial,ANY,ANY}(x, tileH, tileV, ...)
+
+\S4method{getTile}{sf,ANY,ANY}(x, tileH, tileV, ...)
 }
 \arguments{
-\item{x}{Extent information, see Details. Ignored if \code{tileH} and
-\code{tileV} are specified.}
+\item{mode}{Interactive selection mode as \code{character}. Available options 
+are \code{"click"} (default) and \code{"draw"} that trigger interactive MODIS 
+tile selection and free feature drawing, respectively. Triggered only if 'x' 
+and tile IDs are omitted.}
+
+\item{...}{Additional arguments passed to \code{\link{MODISoptions}}, see
+Details.}
+
+\item{x}{Extent information, see Details.}
 
 \item{tileH, tileV}{\code{numeric} or \code{character}. Horizontal and 
 vertical tile number(s) of the 
 \href{https://nsidc.org/data/docs/daac/mod10_modis_snow/landgrid.html}{MODIS Sinusoidal grid}
-(e.g., \code{tileH = 1:5}). If specified, no cropping is performed and the 
-full tile(s) (if more than one then also mosaicked) is (are) processed!}
-
-\item{mode}{Interactive selection mode as \code{character}. Available options 
-are \code{"click"} (default) and \code{"draw"} that trigger interactive MODIS 
-tile selection and free feature drawing, respectively. Ignored if any of 'x' 
-or 'tileH,tileV' is NOT missing.}
-
-\item{...}{Additional arguments passed to \code{\link{MODISoptions}}. Here, 
-only 'outProj' and 'pixelSize' are relevant, and this only if 'x' is an 
-object of class \code{character}, \code{map}, \code{Extent} or \code{bbox}.}
+(e.g., \code{tileH = 1:5}). Cropping is disabled here and full tiles (if more 
+than one then also mosaicked) are processed instead. Ignored if \code{x} is 
+specified.}
 }
 \value{
 A \code{MODISextent} object.
@@ -32,18 +63,21 @@ A \code{MODISextent} object.
 Get MODIS tile ID(s) for a specific geographic area.
 }
 \details{
-If \code{x} is of class (see Examples for use cases)
+Unless stated otherwise in the following, target 'outProj' and 'pixelSize' 
+are carried over from \code{\link[MODIS]{MODISoptions}}.
+
+If 'x' is of class (see Examples for use cases)
 \tabular{ll}{
   \code{missing}:\cr
-  \tab If 'tileH,tileV' are specified, 'x' will be ignored. If no such tile 
-  indices are provided and 'x' is missing, a viewer window pops up that 
-  allows interactive tile selection from the global MODIS Sinusoidal grid or, 
-  if \code{mode = "draw"}, free feature drawing.\cr
+  \tab If tile IDs (see Arguments) are also missing, a viewer window 
+  pops up that allows for interactive tile selection from the global MODIS 
+  Sinusoidal grid or, if \code{mode = "draw"}, free feature drawing.\cr
   \cr 
   \code{character}:\cr
-  \tab Either the country name of a \code{map} object (see \code{\link{map}})
-  or a valid file path of a raster image or ESRI shapefile (shp). The former 
-  approach also supports pattern matching via regular expressions.\cr
+  \tab The country name of a \code{map} object (see \code{\link{map}}) with 
+  pattern matching via regular expressions enabled. Alternatively, a valid 
+  file path to a single ESRI shapefile (.shp) or an image readable by 
+  \code{\link[raster]{raster}}.\cr
   \cr
   \code{Raster*}:\cr
   \tab Spatial extent, resolution, and projection of the specified 
@@ -53,12 +87,16 @@ If \code{x} is of class (see Examples for use cases)
   \href{http://spatialreference.org/ref/epsg/wgs-84/}{EPSG:4326} is assumed.\cr
   \cr
   \code{Extent}, \code{bbox}:\cr
-  \tab Boundary coordinates from \code{Extent} and \code{bbox} objects are 
-  assumed to be in \href{http://spatialreference.org/ref/epsg/wgs-84/}{EPSG:4326} 
-  as such objects have no projection information attached.\cr
+  \tab Boundary coordinates from \code{Extent} objects are generally assumed 
+  to be in \href{http://spatialreference.org/ref/epsg/wgs-84/}{EPSG:4326} as 
+  such objects have no projection information attached. The same applies for 
+  'bbox' objects lacking CRS information.\cr
+  \cr
+  \code{sf}, \code{Spatial}:\cr
+  \tab Except for resolution, same as for \code{Raster*}.\cr
   \cr
   Other:\cr
-  \tab \code{Spatial}, \code{sf}, or \code{map} object.
+  \tab A \code{map} object.
 }
 }
 \note{
@@ -71,6 +109,7 @@ easy data access is granted through \code{\link{getData}}.
 # ex 1 ############
 # interactive tile selection
 getTile()
+getTile(mode = "draw")
 }
 
 # ex 2: Spatial (taken from ?rgdal::readOGR) ############

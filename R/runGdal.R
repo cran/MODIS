@@ -20,10 +20,7 @@
 #' @param forceDownload \code{logical}, see \code{\link{getHdf}}.
 #' @param overwrite \code{logical}, defaults to \code{FALSE}. Determines 
 #' whether or not to overwrite existing SDS output files. 
-#' @param maskValue \code{numeric}. Value to be excluded when resampling (via gdalwarp -srcnodata argument).  
-#' This allows non-data values, for example water, to be ignored and thus not effect the final data.
-#' NOTE: this argument will be ignored if the original SDS has a No Data value defined.
-#' 
+#' @param maskValue Currently ignored. 
 #' @param ... Additional arguments passed to \code{\link{MODISoptions}}, e.g. 
 #' 'wait'. Permanent settings for these arguments are temporarily overridden.
 #' 
@@ -67,19 +64,12 @@
 #' @seealso 
 #' \code{\link{getHdf}}, \code{\link{runMrt}}.
 #' 
-#' @note 
-#' You need to have \href{https://gdal.org/}{GDAL} installed on your system.\cr\cr
-#' On Unix-alkes, install \code{gdal-bin}.\cr
-#' On Windows, you need to install GDAL through \href{http://trac.osgeo.org/osgeo4w/}{OSGeo4W} 
-#' or \href{http://fwtools.maptools.org/}{FWTools} since the standard GDAL does 
-#' not support HDF4 format.
-#' 
 #' @examples 
 #' \dontrun{
 #' # LST in Austria
 #' runGdal( product="MOD11A1", extent="austria", begin="2010001", end="2010005", SDSstring="101")
 #' 
-#' # LST with interactiv area selection
+#' # LST with interactive tile selection
 #' runGdal( product="MOD11A1", begin="2010001", end="2010005", SDSstring="101")
 #' 
 #' ### outProj examples
@@ -89,7 +79,7 @@
 #'          SDSstring="101", outProj="EPSG:32634")
 #' 
 #' runGdal( job="LSTaustria", product="MOD11A1", extent="Austria", begin="2010001", end="2010005",
-#'          SDSstring="101", outProj="32634")
+#'          SDSstring="101", outProj=32634)
 #' 
 #' runGdal( job="LSTaustria", product="MOD11A1", extent="Austria", begin="2010001", end="2010005",
 #'          SDSstring="101", outProj="+proj=utm +zone=34 +ellps=WGS84 +datum=WGS84 +units=m +no_defs")
@@ -110,7 +100,7 @@
 #' @name runGdal
 runGdal <- function(product, collection=NULL, 
                     begin=NULL, end=NULL, 
-                    extent=NULL, tileH=NULL, tileV=NULL, 
+                    extent, tileH, tileV, 
                     SDSstring=NULL, job=NULL, checkIntegrity=TRUE, 
                     forceDownload=TRUE, overwrite = FALSE, maskValue=NULL, ...)
 {
@@ -127,11 +117,7 @@ runGdal <- function(product, collection=NULL,
     tLimits     <- transDate(begin=begin,end=end)
     
     dataFormat <- toupper(opts$dataFormat) 
-    if (dataFormat == 'RAW BINARY')
-    {
-        stop('in argument dataFormat=\'raw binary\', format not supported by GDAL (it is MRT specific) type: \'options("MODIS_gdalOutDriver")\' (column \'name\') to list available inputs')
-    }
-  
+
     if(dataFormat == 'HDF-EOS')
     {
         dataFormat <- "HDF4IMAGE"
@@ -142,56 +128,54 @@ runGdal <- function(product, collection=NULL,
     
     if(is.null(opts$gdalOutDriver))
     {
-        opts$gdalOutDriver <- gdalWriteDriver()
+        opts$gdalOutDriver = getGdalWriteDrivers()
         options("MODIS_gdalOutDriver"=opts$gdalOutDriver) # save for current session
     }
     
-    if (any(grepl(dataFormat, opts$gdalOutDriver$name, ignore.case = TRUE)))
-    {
-        dataFormat <- grep(opts$gdalOutDriver$name, pattern=paste("^",dataFormat,"$",sep=""),ignore.case = TRUE,value=TRUE)
-        of <- paste0(" -of ",dataFormat)
-        extension  <- getExtension(dataFormat)
-    } else 
-    {
-        stop('in argument dataFormat=\'',opts$dataFormat,'\', format not supported by GDAL type: \'gdalWriteDriver()\' (column \'name\') to list available inputs')
-    }
-    
+    dataFormat = checkGdalWriteDriver(dataFormat)
+    xtn = getExtension(dataFormat)
+
     #### settings with messages
     # output pixel size in output proj units (default is "asIn", but there are 2 chances of changing this argument: pixelSize, and if extent comes from a Raster* object.
-     
-    if (!inherits(extent, "MODISextent")) {
-      extent = if (product@TYPE[1] == "Tile" | 
-                   (all(!is.null(extent) | !is.null(tileH) & !is.null(tileV)) & 
-                    product@TYPE[1]=="CMG")) {
-        getTile(x = extent, tileH = tileH, tileV = tileV
-                , outProj = opts$outProj, pixelSize = opts$pixelSize)
-      } else {
-        NULL
+    
+    ## pass missing args on to getTile() (see 
+    ## https://stackoverflow.com/questions/31557805/passing-missing-argument-from-function-to-function-in-r)
+    args = as.list(match.call())
+    args[[1]] <- NULL # remove first list element, it's the function call
+    args = args[names(args) %in% c("extent", "tileH", "tileV")]
+    names(args)[names(args) == "extent"] = "x"
+    
+    if (missing(extent) || !inherits(extent, "MODISextent")) {
+      extent = if (product@TYPE[1] == "Tile" || 
+                   (product@TYPE[1] == "CMG" && 
+                    any(!missing(extent), all(!missing(tileH), !missing(tileV))))) {
+        do.call(
+          getTile
+          , append(args, list(outProj = opts$outProj, pixelSize = opts$pixelSize))
+          , envir = parent.frame()
+        )
       }
     }
 
     
     ### GDAL command line arguments -----
-    
+
     ## obligatory arguments
-    t_srs <- do.call(OutProj, c(list(product = product, extent = extent), opts))
-    # t_srs <- OutProj(product, extent, opts) # outProj
-    tr <- do.call(PixelSize, c(list(extent = extent), opts))
-    # tr <- PixelSize(extent, opts)           # pixelSize
+    t_srs <- do.call(OutProj, append(list(product = product, extent = extent), opts))
+    tr <- do.call(PixelSize, append(list(extent = extent), opts))
     rt <- do.call(ResamplingType, opts)
-    # rt <- ResamplingType(opts)              # resamplingType
     s_srs <- InProj(product)                # inProj
     te <- TargetExtent(extent,              # targetExtent
-                       outProj = strsplit(t_srs, "'|\"")[[1]][2]) 
-    
-    ## non-obligatory arguments (GTiff blocksize and compression, see 
+                       outProj = t_srs)
+
+    ## non-obligatory arguments (GTiff blocksize and compression, see
     ## http://www.gdal.org/frmt_gtiff.html)
     bs <- do.call(BlockSize, opts)
-    # bs <- BlockSize(opts)                   # blockSize
     cp <- do.call(OutputCompression, opts)
-    # cp <- OutputCompression(opts)           # compression
-    q <- do.call(QuietOutput, opts)
-    # q <- QuietOutput(opts)                  # quiet
+    co <- c(cp, bs)
+    
+    
+    ### PRODUCT PROCESSING ====
     
     lst_product <- vector("list", length(product@PRODUCT))
     for (z in seq_along(product@PRODUCT)) {
@@ -260,15 +244,16 @@ runGdal <- function(product, collection=NULL,
             
             if(length(files)>0)
             {
-              w <- getOption("warn")
-              options("warn"= -1)
-              SDS <- list()
-              for (y in seq_along(files))
-              { # get all SDS names for one chunk
-                SDS[[y]] <- getSds(HdfName=files[y], SDSstring=SDSstring, method="GDAL")
-              }
-              options("warn"= w)
-            
+              SDS = lapply(
+                files
+                , function(y) {
+                  getSds(
+                    HdfName = y
+                    , SDSstring = SDSstring
+                  )
+                }
+              )
+
               NAS <- getNa(SDS[[1]]$SDS4gdal)
 
               ## loop over sds
@@ -277,353 +262,163 @@ runGdal <- function(product, collection=NULL,
               for (i in seq_along(SDS[[1]]$SDSnames)) {
                 # i=1
                 outname <- paste0(paste0(strsplit(basename(files[1]),"\\.")[[1]][1:2],collapse="."),
-                   ".", gsub(SDS[[1]]$SDSnames[i],pattern=" ",replacement="_"), extension)
+                   ".", gsub(SDS[[1]]$SDSnames[i],pattern=" ",replacement="_"), xtn)
                   
                 ## system independent arguments and files required for gdal operations
-                cmd <- paste0(opts$gdalPath, "gdalwarp")
                 ofile <- paste0(outDir, '/', outname)
-                
-                rpl = system.file("gdal", "val_repl.py", package = "MODIS")
-                Sys.chmod(rpl, mode = "0700", use_umask = TRUE)
+
+                # rpl = system.file("gdal", "val_repl.py", package = "MODIS")
+                # Sys.chmod(rpl, mode = "0700", use_umask = TRUE)
                 
                 gdalSDS <- sapply(SDS,function(x){x$SDS4gdal[i]}) # get names of layer 'o' of all files (SDS)
                 
                 naID <- which(SDS[[1]]$SDSnames[i] == names(NAS))
-                if(length(naID)>0)
-                {
-                  nodataValue = NAS[[naID]]
-                  srcnodata <- paste0(" -srcnodata ", nodataValue)
-                  dstnodata <- paste0(" -dstnodata ", nodataValue)
-                } else
-                {
-                  nodataValue = NULL
-                  srcnodata <- NULL
-                  dstnodata <- NULL 
-                }
-                
-                if (grepl("M.D13C2\\.005", todo))
-                {
-                  if(i==1)
-                  {
-                    cat("\n###############\nM.D13C2.005 is likely to have a problem in metadata extent information, it is corrected on the fly\n###############\n") 
-                  }
-                  ranpat     <- makeRandomString(length=21)
-                  randomName <- paste0(outDir,"/deleteMe_",ranpat,".tif") 
-                  on.exit(unlink(list.files(path=outDir,pattern=ranpat,full.names=TRUE),recursive=TRUE))
-                  for(ix in seq_along(gdalSDS))
-                  {
-                    cmd1 <- paste0(opts$gdalPath,"gdal_translate -a_nodata ",NAS[[naID]]," '",gdalSDS[ix],"' '",randomName[ix],"'")   
-                    cmd2 <- paste0(opts$gdalPath,"gdal_edit.py -a_ullr -180 90 180 -90 '",randomName[ix],"'")
-                    
-                    if (.Platform$OS=="unix")
-                    {
-                      system(cmd1,intern=TRUE)
-                      system(cmd2,intern=TRUE)
-                    } else
-                    {
-                      shell(cmd1,intern=TRUE)
-                      shell(cmd2,intern=TRUE)
-                    }
+                nodataValue = srcnodata = dstnodata = if (length(naID) > 0) NAS[[naID]]
 
-                  }
-                  gdalSDS <- randomName
-
-                } 
-                
-                
-                ### unix ----
-                
-                if (.Platform$OS == "unix") {
+                if (!file.exists(ofile) || overwrite) {
                   
-                  ifile <- paste0(gdalSDS,collapse="' '")
-                  
-                  if (!file.exists(ofile) | overwrite) {
-                    
-                    ## if required, adjust pixel size and/or target extent
-                    if (is.null(tr) | (!is.null(extent@target) &
-                                       gsub("-t_srs", "-s_srs", t_srs) == s_srs)) {
-                      
-                      # extract whole tile
-                      cmd2 = paste0(cmd,
-                                    s_srs,
-                                    s_srs,
-                                    of,
-                                    cp,
-                                    bs,
-                                    rt,
-                                    q,
-                                    srcnodata,
-                                    dstnodata,
-                                    ' -overwrite',
-                                    ' -multi',
-                                    " \'", ifile,"\'",
-                                    " ",
-                                    ofile)
-                      
-                      cmd2 <- gsub(x=cmd2,pattern="\"",replacement="'")
-                      system(cmd2)
-                      
-                      # if '-ts' is missing, convert 'asIn' to actual pixel size
-                      tmp = raster::raster(ofile)  
-                      
-                      if (is.null(tr)) {
-                        if (gsub("-t_srs", "-s_srs", t_srs) != s_srs) {
-                          tmp = raster::projectExtent(tmp, strsplit(t_srs, "'|\"")[[1]][2])
-                        } 
-                        
-                        rsl = raster::res(tmp)
-                        tr = paste(" -tr", rsl[1], rsl[2])
-                      }
-                      
-                      # if 'outProj == "asIn"', make sure input and output grid 
-                      # alignment is identical
-                      if (!is.null(extent@target) &
-                          gsub("-t_srs", "-s_srs", t_srs) == s_srs) {
-                        tmp = raster::crop(tmp, extent@target$extent, snap = "out")
-                        te = paste(" -te", paste(raster::extent(tmp)[c(1, 3, 2, 4)], collapse = " "))
-                      }
-                      
-                      rm(tmp)
-                    }
-                    
-                    
-                    ### 'maskValue' ----
-
-                    ## dummy file
-                    dmy = tempfile("val_repl", tmpdir = raster::tmpDir(), fileext = extension)
-                    
-                    if(!is.null(maskValue)) {
-                      
-                      # check numeric
-                      if (is.character(maskValue)) {
-                        maskValue = as.numeric(maskValue)
-                      } else if (!is.numeric(maskValue)) {
-                        stop("'maskValue' needs to be numeric.")
-                      }
-                      
-                      # if required, remove No Data Value from 'maskValue'
-                      if (any(maskValue == nodataValue)) {
-                        maskValue = maskValue[maskValue != nodataValue]
-                      }
-                      
-                      # if No Data Value is not already defined 
-                      if (is.null(srcnodata)) {
-                        nodataValue = maskValue[1]
-                        
-                        if (length(maskValue) > 1) {
-                          
-                          for (w in 2:length(maskValue)) {
-                            system(gsub("\"", "'"
-                                        , paste(rpl
-                                                , "-innd", maskValue[w]
-                                                , "-outnd", nodataValue
-                                                , of
-                                                , paste0(" \'", ifelse(w == 2, ifile, ofile),"\'")
-                                                , dmy)))
-                            
-                            jnk = file.copy(dmy, ofile, overwrite = TRUE)
-                          }
-                        }
-                        
-                        srcnodata <- paste0(" -srcnodata ", nodataValue)
-                        dstnodata <- paste0(" -dstnodata ", nodataValue)
-                        
-                      # if No Data Value is already defined  
-                      } else {
-                        
-                        for (w in 1:length(maskValue)) {
-                          system(gsub("\"", "'"
-                                      , paste(rpl
-                                              , "-innd", maskValue[w]
-                                              , "-outnd", nodataValue
-                                              , of
-                                              , paste0(" \'", ifelse(w == 1, ifile, ofile),"\'")
-                                              , dmy)))
-                          
-                          jnk = file.copy(dmy, ofile, overwrite = TRUE)
-                        }
-                      }
-                      
-                      masked = file.exists(dmy)
-                    } else {
-                      masked = FALSE
-                    }
-                    
-                    ## extract layers
-                    cmd <- paste0(cmd,
-                                  s_srs,
-                                  t_srs,
-                                  of,
-                                  if (!is.null(extent@target)) te else NULL,
-                                  tr, 
-                                  cp,
-                                  bs,
-                                  rt,
-                                  q,
-                                  srcnodata,
-                                  dstnodata,
-                                  " -overwrite",
-                                  " -multi",
-                                  " \'", ifelse(masked, dmy, ifile),"\'",
-                                  " ",
-                                  ofile)
-                    
-                    cmd <- gsub(x=cmd,pattern="\"",replacement="'")
-                    system(cmd)
-                    
-                    ## if required, remove temporary file
-                    if (file.exists(dmy)) {
-                      jnk = file.remove(dmy)
-                    }
+                  if (file.exists(ofile)) {
+                    jnk = file.remove(ofile)
                   }
                   
+                  ## create first set of gdal options required by subsequent step
+                  lst = list(dataFormat, co, rt, srcnodata, dstnodata)
+                  names(lst) = paste0(
+                    "-"
+                    , c("of", "co", "r", "srcnodata", "dstnodata")
+                  )
+                  lst = Filter(Negate(is.null), lst)
                   
-                ### windows ----
+                  params = character()
+                  for (j in seq(lst)) {
+                    params = c(params, names(lst)[j], lst[[j]])
+                  }
                   
-                } else {  
-                  
-                  ## system dependent prerequisites
-                  ifile <- paste0(gdalSDS,collapse='" "')
-                  
-                  if (!file.exists(ofile) | overwrite) {
+                  ## if required, adjust pixel size and/or target extent
+                  if (is.null(tr) | (!is.null(extent@target) & t_srs == s_srs)) {
                     
-                    ## if required, adjust pixel size and/or target extent
-                    if (is.null(tr) | (!is.null(extent@target) &
-                                       gsub("-t_srs", "-s_srs", t_srs) == s_srs)) {
-                      
-                      # extract whole tile
-                      shell(
-                        paste0(cmd,
-                               s_srs,
-                               s_srs,
-                               of,
-                               cp,
-                               bs,
-                               rt,
-                               q,
-                               srcnodata,
-                               dstnodata,
-                               ' -overwrite',
-                               ' -multi',
-                               ' \"', ifile,'\"',
-                               ' \"', ofile,'\"')
+                    # extract whole tile
+                    sf::gdal_utils(
+                      util = "warp"
+                      , source = gdalSDS
+                      , destination = ofile
+                      , options = c(
+                        params
+                        , "-overwrite"
+                        , "-multi"
                       )
-                      
-                      # if '-ts' is missing, convert 'asIn' to actual pixel size
-                      tmp = raster::raster(ofile)  
-                      
-                      if (is.null(tr)) {
-                        if (gsub("-t_srs", "-s_srs", t_srs) != s_srs) {
-                          tmp = raster::projectExtent(tmp, strsplit(t_srs, "'|\"")[[1]][2])
-                        } 
-                        
-                        rsl = raster::res(tmp)
-                        tr = paste(" -tr", rsl[1], rsl[2])
-                      }
-                      
-                      # if 'outProj == "asIn"', make sure input and output grid
-                      # alignment is identical
-                      if (!is.null(extent@target) &
-                          gsub("-t_srs", "-s_srs", t_srs) == s_srs) {
-                        tmp = raster::crop(tmp, extent@target$extent, snap = "out")
-                        te = paste(" -te", paste(raster::extent(tmp)[c(1, 3, 2, 4)], collapse = " "))
-                      }
-                      
-                      rm(tmp)
-                    }
-                    
-                    
-                    ### 'maskValue' ----
-                    
-                    ## dummy file
-                    dmy = tempfile("val_repl", tmpdir = raster::tmpDir(), fileext = extension)
-                    
-                    if (!is.null(maskValue)) {
-                      
-                      # check numeric
-                      if (is.character(maskValue)) {
-                        maskValue = as.numeric(maskValue)
-                      } else if (!is.numeric(maskValue)) {
-                        stop("'maskValue' needs to be numeric.")
-                      }
-                      
-                      # if required, remove No Data Value from 'maskValue'
-                      if (any(maskValue == nodataValue)) {
-                        maskValue = maskValue[maskValue != nodataValue]
-                      }
-                      
-                      
-                      # if No Data Value is not already defined 
-                      if (is.null(srcnodata)) {
-                        nodataValue = maskValue[1]
-                        
-                        if (length(maskValue) > 1) {
-                          
-                          for (w in 2:length(maskValue)) {
-                            shell(paste(rpl
-                                        , "-innd", maskValue[w]
-                                        , "-outnd", nodataValue
-                                        , of
-                                        , ifelse(w == 2, ifile, ofile)
-                                        , dmy))
-                            
-                            jnk = file.copy(dmy, ofile, overwrite = TRUE)
-                          }
-                        }
-                        
-                        srcnodata <- paste0(" -srcnodata ", nodataValue)
-                        dstnodata <- paste0(" -dstnodata ", nodataValue)
-                        
-                      # if No Data Value is already defined  
-                      } else {
-                        
-                        for (w in 1:length(maskValue)) {
-                          shell(paste(rpl
-                                      , "-innd", maskValue[w]
-                                      , "-outnd", nodataValue
-                                      , of
-                                      , ifelse(w == 1, ifile, ofile)
-                                      , dmy))
-                          
-                          jnk = file.copy(dmy, ofile, overwrite = TRUE)
-                        }
-                      }
-                      
-                      masked = file.exists(dmy)
-                    } else {
-                      masked = FALSE
-                    }
-                    
-                    ## extract layers
-                    shell(
-                      paste0(cmd,
-                             s_srs,
-                             t_srs,
-                             of,
-                             if (!is.null(extent@target)) te else NULL,
-                             tr, 
-                             cp,
-                             bs,
-                             rt,
-                             q,
-                             srcnodata,
-                             dstnodata,
-                             ' -overwrite',
-                             ' -multi',
-                             ' \"', ifelse(masked, dmy, ifile),'\"',
-                             ' \"', ofile,'\"')
+                      , quiet = !is.null(opts$quiet) && opts$quiet
                     )
                     
-                    ## if required, remove temporary file
-                    if (file.exists(dmy)) {
-                      jnk = file.remove(dmy)
+                    # if '-ts' is missing, convert 'asIn' to actual pixel size
+                    tmp = raster::raster(ofile)  
+                    
+                    if (is.null(tr)) {
+                      if (t_srs != s_srs) {
+                        tmp = raster::projectExtent(tmp, crs = t_srs)
+                      } 
+                      
+                      tr = raster::res(tmp)
                     }
+                    
+                    # if 'outProj == "asIn"', make sure input and output grid
+                    # alignment is identical
+                    if (!is.null(extent@target$extent) & t_srs == s_srs) {
+                      tmp = raster::crop(tmp, extent@target$extent, snap = "out")
+                      te = as.character(sf::st_bbox(tmp))
+                    }
+                    
+                    rm(tmp)
                   }
-                }
-                
-                if (grepl("M.D13C2\\.005", todo)) {
-                  unlink(list.files(path = outDir, pattern = ranpat, 
-                                    full.names = TRUE), recursive = TRUE)
+                  
+                  
+                  # ### 'maskValue' ----
+                  # 
+                  # ## dummy file
+                  # dmy = tempfile("val_repl", tmpdir = normalizePath(raster::tmpDir()), fileext = xtn)
+                  # 
+                  # if (!is.null(maskValue)) {
+                  #   
+                  #   # check numeric
+                  #   if (is.character(maskValue)) {
+                  #     maskValue = as.numeric(maskValue)
+                  #   } else if (!is.numeric(maskValue)) {
+                  #     stop("'maskValue' needs to be numeric.")
+                  #   }
+                  #   
+                  #   # if required, remove No Data Value from 'maskValue'
+                  #   if (any(maskValue == nodataValue)) {
+                  #     maskValue = maskValue[maskValue != nodataValue]
+                  #   }
+                  #   
+                  #   ifile <- paste0(gdalSDS,collapse='" "')
+                  #
+                  #   # if No Data Value is not already defined 
+                  #   if (is.null(srcnodata)) {
+                  #     nodataValue = maskValue[1]
+                  #     
+                  #     if (length(maskValue) > 1) {
+                  #       
+                  #       for (w in 2:length(maskValue)) {
+                  #         shell(paste(rpl
+                  #                     , "-innd", maskValue[w]
+                  #                     , "-outnd", nodataValue
+                  #                     , of
+                  #                     , ifelse(w == 2, ifile, ofile)
+                  #                     , dmy))
+                  #         
+                  #         jnk = file.copy(dmy, ofile, overwrite = TRUE)
+                  #       }
+                  #     }
+                  #     
+                  #     srcnodata <- paste0(" -srcnodata ", nodataValue)
+                  #     dstnodata <- paste0(" -dstnodata ", nodataValue)
+                  #     
+                  #   # if No Data Value is already defined  
+                  #   } else {
+                  #     
+                  #     for (w in 1:length(maskValue)) {
+                  #       shell(paste(rpl
+                  #                   , "-innd", maskValue[w]
+                  #                   , "-outnd", nodataValue
+                  #                   , of
+                  #                   , ifelse(w == 1, ifile, ofile)
+                  #                   , dmy))
+                  #       
+                  #       jnk = file.copy(dmy, ofile, overwrite = TRUE)
+                  #     }
+                  #   }
+                  #   
+                  #   masked = file.exists(dmy)
+                  # } else {
+                  #   masked = FALSE
+                  # }
+                  
+                  ## extract layers
+                  lst = c(lst, list("-t_srs" = if (t_srs != s_srs) t_srs, "-te" = te, "-tr" = tr))
+                  lst = Filter(Negate(is.null), lst)
+                  
+                  for (j in (j+1):length(lst)) {
+                    params = c(params, names(lst)[j], lst[[j]])
+                  }
+                  
+                  jnk = file.remove(ofile)
+                  sf::gdal_utils(
+                    util = "warp"
+                    , source = gdalSDS
+                    , destination = ofile
+                    , options = c(
+                      params
+                      , "-overwrite"
+                      , "-multi"
+                    )
+                    , quiet = !is.null(opts$quiet) && opts$quiet
+                  )
+                  
+                  # ## if required, remove temporary file
+                  # if (file.exists(dmy)) {
+                  #   jnk = file.remove(dmy)
+                  # }
                 }
                 
                 ofiles[i] <- ofile
