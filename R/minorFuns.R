@@ -1,16 +1,16 @@
 #' Minor MODIS Package Functions
 #'
 #' @description 
-#' Compendium of minor \strong{MODIS} package-related functions.
+#' Compendium of minor **MODIS** package-related functions.
 #' 
-#' @param pattern Regular expression passed to \code{\link{grep}}.
-#' @param database \code{character}. Defaults to \code{"worldHires"}, see 
-#' \code{\link{map}} for available options.
-#' @param plot \code{logical}, defaults to \code{FALSE}. If \code{TRUE}, search 
-#' results are displayed.
+#' @param pattern Regular expression passed to [grep()].
+#' @param database `character`. Defaults to `"worldHires"`, see [maps::map()] 
+#'   for available options.
+#' @param plot `logical`, defaults to `FALSE`. If `TRUE`, search results are 
+#'   displayed.
 #' 
 #' @return 
-#' A \code{list} of length 2. The first entry is the call to create the given 
+#' A `list` of length 2. The first entry is the call to create the given 
 #' map, whereas the second entry represents the names of areas within the 
 #' search. 
 #' 
@@ -18,7 +18,7 @@
 #' Matteo Mattiuzzi
 #' 
 #' @seealso 
-#' \code{\link{getTile}}, \code{\link{map}}, \code{\link{grep}}.
+#' [getTile()], [maps::map()], [grep()].
 #' 
 #' @examples 
 #' \donttest{
@@ -93,7 +93,7 @@ stubborn <- function(level = "high") {
 # }
 
 
-#' @describeIn minorFuns Simplifies search for \strong{mapdata}-based extents
+#' @describeIn minorFuns Simplifies search for **mapdata**-based extents
 #' @aliases search4map
 #' @export search4map
 search4map <- function(pattern="",database='worldHires',plot=FALSE)
@@ -281,25 +281,18 @@ filesUrl <- function(url)
   on.exit(options(warn = iw))
   
   h <- curl::new_handle(
-    connecttimeout = 10L
+    connecttimeout = 60L
   )
   
   ## laads, nsidc require login
-  if (grepl("nsidc|ladsweb", url)) {
-    crd = credentials()
-    usr = crd$login; pwd = crd$password
-    
-    if (any(is.null(c(usr, pwd)))) {
-      crd = EarthdataLogin()
-      usr = crd$login; pwd = crd$password
-    }
-    
-    curl::handle_setopt(
-      handle = h,
-      httpauth = 1,
-      userpwd = paste0(usr, ":", pwd)
-    )
-  }
+  crd = credentials()
+  usr = crd$login; pwd = crd$password
+  
+  curl::handle_setopt(
+    handle = h,
+    httpauth = 1,
+    userpwd = paste0(usr, ":", pwd)
+  )
   
   ## establish connection
   is_laads = grepl("ladsweb", url)
@@ -353,13 +346,9 @@ makeRandomString <- function(n=1, length=12)
 ModisFileDownloader <- function(x, ...)
 {
     x <- basename(x)
-
-    # earthdata login credentials (here for simplicity)
-    usr = credentials()$login
-    pwd = credentials()$password
     
     opts <- combineOptions(...)
-
+    
     opts$stubbornness <- stubborn(opts$stubbornness)
     opts$quiet <- as.logical(opts$quiet)
     
@@ -387,7 +376,13 @@ ModisFileDownloader <- function(x, ...)
               cat("\nMultisocket connection to:",paste(names(path$remotePath), collapse = ' and '),"\n############################\n")
             } else
             {
-              cat("\nGetting file from:",opts$MODISserverOrder[hv[g]],"\n############################\n")
+              cat(
+                sprintf(
+                  "\nGetting file %s from: %s\n############################\n"
+                  , x
+                  , opts$MODISserverOrder[hv[g]]
+                )
+              )
             }
           }
           
@@ -408,75 +403,20 @@ ModisFileDownloader <- function(x, ...)
             }
               
             server <- names(path$remotePath)
-            if (length(server) > 1)
+            if (length(server) > 1) {
               server <- server[which(server %in% opts$MODISserverOrder[hv[g]])]
+            }
               
             infile <- paste(path$remotePath[id_remotepath], x[a], sep = "/", 
                             collapse = "")
             
-            ## adapt 'dlmethod' and 'extra' if server == "LPDAAC"
-            if (!opts$dlmethod %in% c("wget", "curl")) {
-              
-              cmd = try(system("wget -h", intern = TRUE), silent = TRUE)
-              method = "wget"
-              
-              if (inherits(cmd, "try-error")) {
-                cmd = try(system("curl -h", intern = TRUE), silent = TRUE)
-                method = "curl"
-              }
-              
-              if (inherits(cmd, "try-error")) {
-                stop("Make sure either 'wget' or 'curl' is available in "
-                     , "order to download data.")
-              }
-            } else {
-              method <- opts$dlmethod
-            }
-            
-            # cookies
-            ofl = file.path(tempdir(), ".cookies.txt")
-            if (!file.exists(ofl))
-              jnk = file.create(ofl)
-            on.exit(file.remove(ofl))
-            
-            # wget extras
-            extra <- if (method == "wget") {
-              paste("--user", usr, "--password", pwd
-                    , "--load-cookies", ofl
-                    , "--save-cookies", ofl
-                    , "--keep-session-cookie --no-check-certificate")
-              
-              # curl extras  
-            } else {
-              paste('--user', paste(usr, pwd, sep = ":")
-                    , '-k -L -c', ofl, '-b', ofl)
-            }
-            
-            
-            # curl download
-            out[a] = if (method == "curl") {
-              h = curl::new_handle(CONNECTTIMEOUT = 60L)
-              curl::handle_setopt(
-                handle = h,
-                httpauth = 1,
-                userpwd = paste0(usr, ":",pwd)
-              )
-              
-              tmp = try(curl::curl_download(infile, destfile, quiet = opts$quiet
-                                            , handle = h), silent = TRUE)
-              
-              # imitate download.file() (ie. 0 = success, non-zero = failure)
-              ifelse(inherits(tmp, "character"), 0, 1)
-              
-            # LAADS or non-curl download  
-            } else {
-              
-              try(
-              download.file(url = infile, destfile = destfile, mode = 'wb', 
-                            method = method, quiet = opts$quiet, 
-                            cacheOK = TRUE, extra = extra),
-                          silent = TRUE)
-            }
+            # download
+            out[a] = downloadFile(
+              url = infile
+              , destfile = destfile
+              , method = opts$dlmethod
+              , quiet = opts$quiet
+            )
           }
           if (is.na(out[a])) {cat("File not found!\n"); unlink(destfile); break} # if NA then the url name is wrong!
           if (out[a]!=0 & !opts$quiet) {cat("Remote connection failed! Re-try:",g,"\r")} 
@@ -743,7 +683,7 @@ fixOrphanedHoles = function(x) {
   sp::SpatialPolygons(fixed, proj4string = sp::CRS(sp::proj4string(x)))
 }
 
-## skip unwanted products, see https://github.com/MatMatt/MODIS/issues/22
+## skip unwanted products, see https://github.com/fdetsch/MODIS/issues/22
 skipDuplicateProducts = function(x, quiet = FALSE) {
   
   products = as.character(getProduct()[, 1])
@@ -765,7 +705,7 @@ skipDuplicateProducts = function(x, quiet = FALSE) {
 }
 
 ## if required, reset 'begin' of composite product to corresponding release 
-## date, see https://github.com/MatMatt/MODIS/issues/43
+## date, see https://github.com/fdetsch/MODIS/issues/43
 correctStartDate = function(begin, avDates, product, quiet = FALSE) {
   
   ## check if any older files exist  
@@ -794,4 +734,40 @@ correctStartDate = function(begin, avDates, product, quiet = FALSE) {
   }
   
   return(begin)
+}
+
+
+### s2 ----
+
+## see also https://github.com/fdetsch/MODIS/issues/110
+
+modis_skip_s2 = function() {
+  
+  use_s2 = sf::sf_use_s2()
+  
+  ## disable use of s2 for spherical geometries
+  jnk = modis_use_s2()
+  
+  return(
+    use_s2
+  )
+}
+
+
+modis_use_s2 = function(
+  use_s2 = FALSE
+) {
+  
+  ## omit console output from `sf::sf_use_s2()`
+  jnk = suppressMessages(
+    sf::sf_use_s2(
+      use_s2
+    )
+  )
+  
+  return(
+    invisible(
+      jnk
+    )
+  )
 }

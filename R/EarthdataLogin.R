@@ -1,29 +1,29 @@
 #' Create File with Earthdata Login Credentials
 #' 
 #' @description 
-#' Create a hidden \code{.netrc} file with Earthdata login credentials in your 
-#' home directory. The information included therein is used to login to 
-#' \url{https://urs.earthdata.nasa.gov/} which is a mandatory requirement in 
-#' order to download MODIS data from LP DAAC, LAADS and NSIDC (see also 
-#' \code{\link{MODISoptions}}). If \code{.netrc} does exists the function can
-#' be used to re-enter credentials.  
+#' Create a hidden `.netrc` file with Earthdata Login credentials in your home 
+#' directory. The information included therein is used to login to 
+#' <https://urs.earthdata.nasa.gov/> which is a mandatory requirement in order 
+#' to download MODIS data from LP DAAC, LAADS and NSIDC (see also 
+#' [MODISoptions()]). If the `.netrc` file already exist, the function can be 
+#' used to re-enter credentials.
 #' 
-#' @param usr,pwd Login credentials as \code{character}. If \code{NULL}, 
-#' username and password are read from the terminal.
+#' @param usr,pwd Login credentials as `character`. If `NULL`, username and 
+#'   password are read from the terminal.
+#' @param path Path to hidden `.netrc` file as `character`. The default should 
+#'   not be changed unless for a good reason.
 #' 
 #' @return 
-#' The \code{\link{invisible}} Earthdata login credentials as \code{list}.
+#' The Earthdata Login credentials as invisible `list`.
 #' 
 #' @author 
 #' Matteo Mattiuzzi and Florian Detsch
 #' 
 #' @seealso 
-#' \itemize{
-#' \item{\url{https://docs.opendap.org/index.php/DAP_Clients_-_Authentication#LDAP} 
-#' (section 2.2)}
-#' \item{\url{https://github.com/MatMatt/MODIS/issues/10}}
-#' \item{\url{https://wiki.earthdata.nasa.gov/display/EL/How+To+Access+Data+With+cURL+And+Wget}}
-#' }
+#' * <https://docs.opendap.org/index.php/DAP_Clients_-_Authentication#LDAP>
+#'   (section 2.2)
+#' * <https://github.com/fdetsch/MODIS/issues/10>
+#' * <https://wiki.earthdata.nasa.gov/display/EL/How+To+Access+Data+With+cURL+And+Wget>
 #' 
 #' @examples 
 #' \dontrun{
@@ -32,13 +32,15 @@
 #' 
 #' @export EarthdataLogin
 #' @name EarthdataLogin
-EarthdataLogin <- function(usr = NULL, pwd = NULL) {
+EarthdataLogin <- function(usr = NULL, pwd = NULL, path = "~/.netrc") {
   
   server = 'urs.earthdata.nasa.gov'
-  nrc <- path.expand("~/.netrc")
+  nrc <- path.expand(path)
   
   # read .netrc entire file
-  lns <- readCredentials()
+  lns <- readCredentials(
+    path = path
+  )
   
   # get servers found on .netrc
   machine <- unlist(listPather(lns,'machine'))
@@ -55,21 +57,27 @@ EarthdataLogin <- function(usr = NULL, pwd = NULL) {
   if(!file.exists(nrc))
   {
     cat("Creating clear text file '~/", basename(nrc)
-        , "' with Earthdata login credentials...\n", sep = "")
+        , "' with Earthdata Login credentials...\n", sep = "")
     insert <- 'y'
   } else
   {
     if(sum(machine %in% server)>0)
     {
       if (any(is.null(lns[[ind]]$login), is.null(lns[[ind]]$password))) {
-        cat("'", nrc, "' with defective Earthdata login credentials found! Please correct them now...\n", sep = "")
+        cat("'", nrc, "' with defective Earthdata Login credentials found! Please correct them now...\n", sep = "")
         insert = "y"
       } else {
         insert <- tolower(readline(paste0("Earthdata credentials seem to be present, do you want to change them? (y/n) \n",sep="")))
       }
     } else
     {
-      cat("'",nrc,"' without Earthdata login credentials found! Please add them now...\n",sep="")
+      if (is.null(usr) || is.null(pwd)) {
+        cat(
+          "File '", nrc, "' without Earthdata Login credentials found.\n"
+          , "Please add them now...\n"
+          , sep = ""
+        )
+      }
       insert <- 'y'
     }
   }
@@ -96,7 +104,7 @@ EarthdataLogin <- function(usr = NULL, pwd = NULL) {
     # if not in netrc file take it from the original server
     if(inherits(lin,'try-error'))
     {
-      lin <- credentials()$login
+      lin <- credentials(path = path)$login
     }
   } else 
   {
@@ -107,14 +115,14 @@ EarthdataLogin <- function(usr = NULL, pwd = NULL) {
     pw <- try(lns[[ind]]$password, silent = TRUE) 
     if(inherits(pw,'try-error'))
     {
-      pw <- credentials()$password  
+      pw <- credentials(path = path)$password  
     }
   } else 
   {
     pw <- pwd
   }
   
-  lns[[ind]] <- list(machine = server, login=lin, password=pw)          
+  lns[[ind]] <- list(machine = server, login=lin, password=pw)
 
   netrc <- file(nrc,open = 'w'); on.exit(close(netrc))
   for (i in seq_along(lns))
@@ -126,10 +134,10 @@ EarthdataLogin <- function(usr = NULL, pwd = NULL) {
 
   Sys.chmod(nrc, mode = "600", use_umask = TRUE)
   
-  return(invisible(credentials()))
+  return(invisible(credentials(path = path)))
 }
 
-## Earthdata login credentials from .netrc file
+## Earthdata Login credentials from .netrc file
 readCredentials = function(path = "~/.netrc") {
   
   # .netrc file

@@ -8,17 +8,17 @@
 search4map(pattern = "", database = "worldHires", plot = FALSE)
 }
 \arguments{
-\item{pattern}{Regular expression passed to \code{\link{grep}}.}
+\item{pattern}{Regular expression passed to \code{\link[=grep]{grep()}}.}
 
-\item{database}{\code{character}. Defaults to \code{"worldHires"}, see 
-\code{\link{map}} for available options.}
+\item{database}{\code{character}. Defaults to \code{"worldHires"}, see \code{\link[maps:map]{maps::map()}}
+for available options.}
 
-\item{plot}{\code{logical}, defaults to \code{FALSE}. If \code{TRUE}, search 
-results are displayed.}
+\item{plot}{\code{logical}, defaults to \code{FALSE}. If \code{TRUE}, search results are
+displayed.}
 }
 \value{
-A \code{list} of length 2. The first entry is the call to create the given 
-map, whereas the second entry represents the names of areas within the 
+A \code{list} of length 2. The first entry is the call to create the given
+map, whereas the second entry represents the names of areas within the
 search.
 }
 \description{
@@ -26,9 +26,9 @@ Compendium of minor \strong{MODIS} package-related functions.
 }
 \section{Functions}{
 \itemize{
-\item \code{search4map}: Simplifies search for \strong{mapdata}-based extents
-}}
+\item \code{search4map()}: Simplifies search for \strong{mapdata}-based extents
 
+}}
 \examples{
 \donttest{
 search4map()
@@ -43,7 +43,7 @@ search4map(pattern="Sicily",plot=TRUE)
 
 }
 \seealso{
-\code{\link{getTile}}, \code{\link{map}}, \code{\link{grep}}.
+\code{\link[=getTile]{getTile()}}, \code{\link[maps:map]{maps::map()}}, \code{\link[=grep]{grep()}}.
 }
 \author{
 Matteo Mattiuzzi

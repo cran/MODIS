@@ -18,69 +18,64 @@ if (!isGeneric("getTile")) {
 #' Get MODIS tile ID(s) for a specific geographic area.
 #' 
 #' @param x Extent information, see Details.
-#' @param tileH,tileV \code{numeric} or \code{character}. Horizontal and 
-#' vertical tile number(s) of the 
-#' \href{https://nsidc.org/data/docs/daac/mod10_modis_snow/landgrid.html}{MODIS Sinusoidal grid}
-#' (e.g., \code{tileH = 1:5}). Cropping is disabled here and full tiles (if more 
-#' than one then also mosaicked) are processed instead. Ignored if \code{x} is 
-#' specified.
-#' @param mode Interactive selection mode as \code{character}. Available options 
-#' are \code{"click"} (default) and \code{"draw"} that trigger interactive MODIS 
-#' tile selection and free feature drawing, respectively. Triggered only if 'x' 
-#' and tile IDs are omitted.
-#' @param ... Additional arguments passed to \code{\link{MODISoptions}}, see
-#' Details.
+#' @param tileH,tileV `numeric` or `character`. Horizontal and vertical tile 
+#' number(s) of the [MODIS Sinusoidal grid](https://modis-land.gsfc.nasa.gov/MODLAND_grid.html)
+#' (e.g., `tileH = 1:5`). Cropping is disabled here and full tiles (if more than
+#' one then also mosaicked) are processed instead. Ignored if 'x' is specified.
+#' @param mode Interactive selection mode as `character`. Available options are 
+#' `"click"` (default) and `"draw"` that trigger interactive MODIS tile 
+#' selection and free feature drawing, respectively. Triggered only if 'x' and 
+#' tile IDs are omitted.
+#' @param ... Additional arguments passed to [MODISoptions()], see Details.
 #' 
 #' @return 
-#' A \code{MODISextent} object.
+#' A `MODISextent` object.
 #' 
 #' @author 
 #' Matteo Mattiuzzi, Florian Detsch
 #' 
 #' @seealso 
-#' \code{\link{extent}}, \code{\link[sf]{st_bbox}}, \code{\link{map}}, 
-#' \code{\link{search4map}}.
+#' [raster::extent()], [sf::st_bbox()], [maps::map()], [search4map()].
 #' 
 #' @note 
-#' \strong{MODIS} does no longer support the tile identification and automated 
+#' **MODIS** does no longer support the tile identification and automated 
 #' download of MERIS and SRTM data. At least as far as the latter is concerned, 
-#' easy data access is granted through \code{\link{getData}}. 
+#' easy data access is granted through [raster::getData()]. 
 #' 
 #' @details 
 #' Unless stated otherwise in the following, target 'outProj' and 'pixelSize' 
-#' are carried over from \code{\link[MODIS]{MODISoptions}}.
+#' are carried over from [MODISoptions()].
 #' 
 #' If 'x' is of class (see Examples for use cases)
 #' \tabular{ll}{
-#'   \code{missing}:\cr
+#'   `missing`:\cr
 #'   \tab If tile IDs (see Arguments) are also missing, a viewer window 
 #'   pops up that allows for interactive tile selection from the global MODIS 
-#'   Sinusoidal grid or, if \code{mode = "draw"}, free feature drawing.\cr
+#'   Sinusoidal grid or, if `mode = "draw"`, free feature drawing.\cr
 #'   \cr 
-#'   \code{character}:\cr
-#'   \tab The country name of a \code{map} object (see \code{\link{map}}) with 
-#'   pattern matching via regular expressions enabled. Alternatively, a valid 
-#'   file path to a single ESRI shapefile (.shp) or an image readable by 
-#'   \code{\link[raster]{raster}}.\cr
+#'   `character`:\cr
+#'   \tab The country name of a `map` object (see [maps::map()]) with pattern 
+#'   matching via regular expressions enabled. Alternatively, a valid file path 
+#'   to a single ESRI shapefile (.shp) or an image readable by 
+#'   [raster::raster()].\cr
 #'   \cr
-#'   \code{Raster*}:\cr
-#'   \tab Spatial extent, resolution, and projection of the specified 
-#'   \code{Raster*} are determined automatically. This information is used by 
-#'   \code{\link{runGdal}} to create perfectly matching files. If the 
-#'   \code{Raster*} comes with no valid CRS, 
-#'   \href{https://spatialreference.org/ref/epsg/wgs-84/}{EPSG:4326} is assumed.\cr
+#'   `Raster*`:\cr
+#'   \tab Spatial extent, resolution, and projection of the specified `Raster*` 
+#'   are determined automatically. This information is used by [runGdal()] to 
+#'   create perfectly matching files. If the `Raster*` comes with no valid CRS, 
+#'   [EPSG:4326](https://spatialreference.org/ref/epsg/wgs-84/) is assumed.\cr
 #'   \cr
-#'   \code{Extent}, \code{bbox}:\cr
-#'   \tab Boundary coordinates from \code{Extent} objects are generally assumed 
-#'   to be in \href{https://spatialreference.org/ref/epsg/wgs-84/}{EPSG:4326} as 
-#'   such objects have no projection information attached. The same applies for 
-#'   'bbox' objects lacking CRS information.\cr
+#'   `Extent`, `bbox`:\cr
+#'   \tab Boundary coordinates from `Extent` objects are generally assumed to be
+#'   in [EPSG:4326](https://spatialreference.org/ref/epsg/wgs-84/) as such 
+#'   objects have no projection information attached. The same applies for 
+#'   `bbox` objects lacking CRS information.\cr
 #'   \cr
-#'   \code{sf}, \code{Spatial}:\cr
-#'   \tab Except for resolution, same as for \code{Raster*}.\cr
+#'   `sf`, `sfc`, `Spatial`:\cr
+#'   \tab Except for resolution, same as for `Raster*`.\cr
 #'   \cr
 #'   Other:\cr
-#'   \tab A \code{map} object.
+#'   \tab A `map` object.
 #' }
 #' 
 #' @examples 
@@ -92,7 +87,7 @@ if (!isGeneric("getTile")) {
 #' }
 #' 
 #' # ex 2: Spatial (taken from ?rgdal::readOGR) ############
-#' dsn <- system.file("vectors/Up.tab", package = "rgdal")[1]
+#' dsn <- system.file("vectors/Up.tab", package = "rgdal")
 #' Up <- rgdal::readOGR(dsn, "Up")
 #' getTile(Up)
 #' 
@@ -213,6 +208,14 @@ mapSelect = function(
     if (inherits(drawing, "try-error")) {
       stop("Shape needs to be closed.")
     }
+    
+    ## disable use of s2 for spherical geometries
+    use_s2 = modis_skip_s2()
+    on.exit(
+      modis_use_s2(
+        use_s2
+      )
+    )
     
     suppressMessages(sr[drawing, ])
   }
@@ -361,6 +364,14 @@ methods::setMethod(
     x
     , ...
   ) {
+    
+    # disable use of s2 for spherical geometries
+    use_s2 = modis_skip_s2()
+    on.exit(
+      modis_use_s2(
+        use_s2
+      )
+    )
     
     # if coord. ref. is missing, set to EPSG:4326
     if (is.na(raster::projection(x))) {
@@ -553,6 +564,14 @@ methods::setMethod(
     
     opts = combineOptions(...)
     
+    # disable use of s2 for spherical geometries
+    use_s2 = modis_skip_s2()
+    on.exit(
+      modis_use_s2(
+        use_s2
+      )
+    )
+    
     # if coord. ref. is missing, set to EPSG:4326
     if (is.na(sf::st_crs(x))) {
       sf::st_crs(x) = sf::st_crs(sr)
@@ -560,9 +579,6 @@ methods::setMethod(
     
     # single-point feature -> take full tile extent
     pts_1 = grepl("POINT", sf::st_geometry_type(x))[1] && nrow(x) == 1L
-    if (pts_1) {
-      # TODO: invoke tile method for single-point features
-    }
     
     target = list(
       outProj = sf::st_crs(x)
@@ -600,6 +616,30 @@ methods::setMethod(
       , extent = raster::extent(x)
       , system = "MODIS"
       , target = target
+    )
+  }
+)
+
+
+### 5.3 sfc ----
+
+#' @aliases getTile,sfc-method
+#' @rdname getTile
+methods::setMethod(
+  "getTile"
+  , methods::signature(
+    x = "sfc"
+  )
+  , function(
+    x
+    , ...
+  ) {
+    
+    getTile(
+      sf::st_as_sf(
+        x
+      )
+      , ...
     )
   }
 )

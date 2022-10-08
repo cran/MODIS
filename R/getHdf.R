@@ -11,37 +11,36 @@ if ( !isGeneric("getHdf") ) {
 #' data pool. When run in a schedule job, the function manage the continuous 
 #' update of the local MODIS data archive.
 #' 
-#' @param product \code{character}. MODIS grid product to be downloaded, see 
-#' \code{\link{getProduct}}. Use dot notation to address Terra and Aqua products 
-#' (e.g. \code{M.D13Q1}). 
-#' @param begin,end \code{Date} or \code{character}. Begin and end date of MODIS 
-#' time series, see \code{\link{transDate}}. 
-#' @param tileH,tileV \code{numeric} or \code{character}. Horizontal and 
-#' vertical tile number, see \code{\link{getTile}}.
-#' @param extent See Details in \code{\link{getTile}}.
-#' @param collection Desired MODIS product collection as \code{character}, 
-#' \code{integer}, or \code{list} as returned by \code{\link{getCollection}}.
-#' @param HdfName \code{character} vector or \code{list}. Full HDF file name(s) 
-#' to download a small set of files. If specified, other file-related parameters 
-#' (i.e., \code{begin}, \code{end}, \code{collection}, etc.) are ignored. 
-#' @param checkIntegrity \code{logical}. If \code{TRUE} (default), the size of 
-#' each downloaded file is checked. In case of inconsistencies, the function 
-#' tries to re-download broken files. 
-#' @param forceDownload \code{logical}. If \code{TRUE} (default), try to 
-#' download data irrespective of whether online information could be retrieved 
-#' via \code{MODIS:::getStruc} or not.
-#' @param ... Further arguments passed to \code{\link{MODISoptions}}, eg 'wait'.
+#' @param product `character`. MODIS grid product to be downloaded, see 
+#'   [getProduct()].
+#' @param begin,end `Date` or `character`. Begin and end date of MODIS time 
+#'   series, see [transDate()]. 
+#' @param tileH,tileV `numeric` or `character`. Horizontal and vertical tile 
+#'   number, see [getTile()].
+#' @param extent See Details in [getTile()].
+#' @param collection Desired MODIS product collection as `character`, `integer`,
+#'   or `list` as returned by [getCollection()].
+#' @param HdfName `character` vector or `list`. Full HDF file name(s) to 
+#'   download a small set of files. If specified, other file-related parameters 
+#'   (e.g., 'begin', 'end', 'collection', etc.) are ignored.
+#' @param checkIntegrity `logical`. If `TRUE` (default), the size of each 
+#'   downloaded file is checked. In case of inconsistencies, the function tries 
+#'   to re-download broken files.
+#' @param forceDownload `logical`. If `TRUE` (default), try to download data 
+#'   irrespective of whether online information could be retrieved via 
+#'   `MODIS:::getStruc` or not.
+#' @param ... Further arguments passed to [MODISoptions()], e.g. 'wait'.
 #' 
 #' @return 
 #' An invisible vector of downloaded data and paths.
 #' 
 #' @references 
-#' MODIS data is currently available from the online data pools at 
-#' \itemize{
-#' \item{NASA Land Processes Distributed Active Archive Center (\href{https://lpdaac.usgs.gov/}{LP DAAC})},
-#' \item{Level-1 and Atmosphere Archive & Distribution System (\href{https://ladsweb.modaps.eosdis.nasa.gov/}{LAADS})}, and
-#' \item{National Snow & Ice Data Center (\href{https://nsidc.org/}{NSIDC})}.
-#' }
+#' MODIS data is currently available from the online data pools at
+#' * NASA Land Processes Distributed Active Archive Center 
+#'   ([LP DAAC](https://lpdaac.usgs.gov/)),
+#' * Level-1 and Atmosphere Archive & Distribution System 
+#'   ([LAADS](https://ladsweb.modaps.eosdis.nasa.gov/)), and
+#' * National Snow & Ice Data Center ([NSIDC](https://nsidc.org/home)).
 #' 
 #' @author 
 #' Matteo Mattiuzzi
@@ -95,7 +94,14 @@ setMethod("getHdf",
     getHdf(HdfName = HdfName, checkIntegrity = checkIntegrity, ...)
             
   opts <- combineOptions(...)
-            
+  
+  if (is.null(opts$EarthdataLogin) || !opts$EarthdataLogin) {
+    stop(
+      "Earthdata Login credentials could not be verified.\nPlease run "
+      , "`MODISoptions(check_earthdata_login = TRUE)` (default) and re-try."
+    )
+  }
+  
   sturheit <- stubborn(level=opts$stubbornness)
   wait     <- as.numeric(opts$wait)
   
@@ -160,62 +166,64 @@ setMethod("getHdf",
         ## ensure compatibility with servers other than those specified in 
         ## `opts$MODISserverOrder`, e.g. when downloading 'MOD16A2' from NTSG
         server <- product@SOURCE[[z]]
-
-        if (!any(server == "NSIDC")) {
-          
-          ## if product is not available from desired server, throw error        
-          if (!any(opts$MODISserverOrder %in% server)) {
-            stop(paste(product@PRODUCT[z], product@CCC[[z]], sep = ".")
-                 , " is available from "
-                 , paste(server, collapse = " and ")
-                 , " only, please adjust 'MODISoptions(MODISserverOrder = ...)' accordingly.")
-          }
-          
-          ## align with servers specified in 'MODISserverOrder' -> idenfify 
-          ## priority and, if applicable, alternative download server
-          server = unlist(sapply(opts$MODISserverOrder, function(i) {
-            grep(i, server, value = TRUE)
-          }))
-          
-        }
         
-        server_alt = ifelse(length(server) > 1, server[2], NA)
-        server = server[1]
+        jnk = strsplit(todo[u],"\\.")[[1]]
+        prodname = jnk[1] 
+        coll     = jnk[2]
         
-        opts$MODISserverOrder = as.character(na.omit(c(server, server_alt)))
-
-        ## this time, suppress console output from `getStruc`
-        jnk <- capture.output(
-          onlineInfo <- suppressWarnings(
-            getStruc(product = product@PRODUCT[z], server = server, 
-                     collection = product@CCC[[z]], begin = tLimits$begin, 
-                     end = tLimits$end, wait = wait)
+        # cycle through available servers
+        idx = stats::na.omit(
+          match(
+            opts$MODISserverOrder
+            , server
           )
         )
         
-        if(!is.na(onlineInfo$online))
-        {
-          if (!onlineInfo$online & !is.na(server_alt) & 
-              server %in% c("LPDAAC", "LAADS"))
-          {
-            cat(server," seems not online, trying on '",server_alt,"':\n",sep="")
-            jnk = capture.output(
-              onlineInfo <- getStruc(product = product@PRODUCT[z], collection = product@CCC[[z]],
-                                     begin = tLimits$begin, end = tLimits$end, 
-                                     wait = wait, server = server_alt)
+        onlineInfo = try(
+          log("e")
+          , silent = TRUE
+        )
+        
+        n = 1L
+        for (i in server[idx]) {
+          jnk = utils::capture.output(
+            onlineInfo <- try(
+              getStruc(
+                product = prodname
+                , collection = coll
+                , begin = tLimits$begin
+                , end = tLimits$end
+                , server = i
+                , wait = wait
+              )
+              , silent = TRUE
             )
+          )
+          
+          if (!inherits(onlineInfo, "try-error")) {
+            opts$MODISserverOrder = server[idx][n:length(idx)]
+            break
           }
-          if(is.null(onlineInfo$dates))
-          {
-            stop("Could not connect to server(s), and no data is available offline!\n")
-          }
-          if(!is.na(onlineInfo$online))
-          {
-            if(!onlineInfo$online & !forceDownload)
-            {
-              cat("Could not connect to server(s), data download disabled! Try to set 'forceDownload = TRUE' in order to enable online file download...\n")
-            }
-          }
+          
+          n = n + 1L
+        }
+        
+        if (inherits(onlineInfo, "try-error")) {
+          stop(
+            sprintf(
+              paste0(
+                "'%s.%s' is not available on %s or the server is currently not "
+                , "reachable. If applicable, try another server or collection."
+              )
+              , prodname
+              , coll
+              , paste(
+                opts$MODISserverOrder
+                , collapse = ", "
+              )
+            )
+            , call. = FALSE
+          )
         }
         
         datedirs <- as.Date(onlineInfo$dates)

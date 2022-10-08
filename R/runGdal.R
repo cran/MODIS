@@ -1,68 +1,64 @@
 #' Process MODIS HDF with GDAL
 #' 
 #' @description 
-#' Downloads MODIS grid data from archive (HTTP or local) and processes the 
-#' files.
+#' Downloads MODIS grid files from archive (HTTP or local) and processes them.
 #' 
-#' @param product \code{character}, see \code{\link{getProduct}}.
-#' @param collection \code{character} or \code{integer}, see 
-#' \code{\link{getCollection}}.
-#' @param begin,end \code{Date} or \code{character}. Begin and end date of MODIS 
-#' time series, see \code{\link{transDate}}.
-#' @param extent Extent information, defaults to \code{'global'}. See
-#' \code{\link{getTile}}.
-#' @param tileH,tileV \code{numeric} or \code{character}. Horizontal and 
-#' vertical tile number, see \code{\link{getTile}}.
-#' @param SDSstring \code{character}, see \code{\link{getSds}}.
-#' @param job \code{character}. Name of the current job for the creation of the 
-#' output folder. If not specified, it is created in 'PRODUCT.COLLECTION_DATETIME'.
-#' @param checkIntegrity \code{logical}, see \code{\link{getHdf}}. 
-#' @param forceDownload \code{logical}, see \code{\link{getHdf}}.
-#' @param overwrite \code{logical}, defaults to \code{FALSE}. Determines 
-#' whether or not to overwrite existing SDS output files. 
-#' @param maskValue Currently ignored. 
-#' @param ... Additional arguments passed to \code{\link{MODISoptions}}, e.g. 
-#' 'wait'. Permanent settings for these arguments are temporarily overridden.
+#' @param product `character`, see [getProduct()].
+#' @param collection `character` or `integer`, see [getCollection()].
+#' @param begin,end `Date` or `character`. Begin and end date of MODIS time 
+#'   series, see [transDate()].
+#' @param extent Extent information, defaults to 'global'. See [getTile()].
+#' @param tileH,tileV `numeric` or `character`. Horizontal and vertical tile 
+#'   number, see [getTile()].
+#' @param SDSstring `character`, see [getSds()].
+#' @param job `character`. Name of the current job for the creation of the 
+#'   output folder. If not specified, it is created in 
+#'   'PRODUCT.COLLECTION_DATETIME'.
+#' @param checkIntegrity,forceDownload `logical`, see [getHdf()].
+#' @param overwrite `logical`, defaults to `FALSE`. Determines whether or not to
+#'   overwrite existing SDS output files.
+#' @param maskValue If `NULL` (default), i.e. not explicitly set, the per-band
+#'   `NoData Value` is taken into account. If not `NULL`, a vector of masking 
+#'   values with each value corresponding to a single band in 'SDSstring'. This 
+#'   can include `"None"` to ignore intrinsic no-data settings on the source
+#'   data set. See also
+#'   <https://gdal.org/programs/gdalwarp.html#cmdoption-gdalwarp-srcnodata> for 
+#'   details.
+#' @param ... Additional arguments passed to [MODISoptions()], e.g. 'wait'. 
+#'   Permanent settings for these arguments are temporarily overridden.
 #' 
 #' @return 
-#' A \code{list} of the same length as 'product'. Each product slot either holds 
-#' a sub-\code{list} of processed dates which, for each time step, include the 
-#' corresponding output files as \code{character} objects or, if no files could 
-#' be found for the specified time period, a single \code{NA}.
+#' A `list` of the same length as 'product'. Each product slot either holds a 
+#' sub-`list` of processed dates which, for each time step, includes the 
+#' corresponding output files as `character` objects or, if no files could be 
+#' found for the specified time period, a single `NA`.
 #' 
-#' @details 
-#' \describe{
-#' \tabular{rll}{
-#'   \tab \code{outProj}\tab CRS/ prj4 or EPSG code of output, any format supported by gdal see examples.\cr \tab \tab Default is 'asIn' (no warping). See \code{?MODISoptions}.\cr
-#'   \tab \code{pixelSize}\tab Numeric single value. Output pixel size in target reference system unit.\cr \tab \tab Default is 'asIn'. See \code{?MODISoptions}.\cr
-#'   \tab \code{resamplingType}\tab Character. Default is 'near', can be one of: 'bilinear', 'cubic', 'cubicspline', 'lanczos'.\cr \tab \tab See \code{?MODISoptions}.\cr
-#'   \tab \code{blockSize}\tab integer. Default \code{NULL} that means the stripe size is set by GDAL.\cr \tab \tab Basically it is the "-co BLOCKYSIZE=" parameter. See \url{https://gdal.org/frmt_gtiff.html}.\cr
-#'   \tab \code{compression}\tab logical. Default is \code{TRUE}, compress data with the lossless LZW compression with "predictor=2".\cr \tab \tab See \url{https://gdal.org/frmt_gtiff.html}.\cr
-#'   \tab \code{dataFormat}\tab Data output format, see \code{getOption("MODIS_gdalOutDriver")} column 'name'.\cr
-#'   \tab \code{localArcPath}\tab Character.  See \code{?MODISoptions}. Local path to look for and/or to download MODIS files.\cr
-#'   \tab \code{outDirPath}\tab Character.  See \code{?MODISoptions}. Root directory where to write \code{job} folder.\cr
-#' }
-#' }
+#' @details
+#' * `outProj, pixelSize, resamplingType, dataFormat, localArcPath, outDirPath`: 
+#'   See [MODISoptions()].
+#' * `blockSize`: integer. If `NULL` (default), the stripe size is set by GDAL. 
+#'   Basically it is the `-co BLOCKYSIZE=` parameter. See 
+#'   <https://gdal.org/frmt_gtiff.html>.
+#' * `compression` logical. If `TRUE` (default), compress data with the lossless
+#'   LZW compression with `predictor=2`. See <https://gdal.org/frmt_gtiff.html>.
 #' 
-#' \code{\link{runGdal}} uses numerous \strong{MODIS} functions under the hood, 
-#' see the linked functions in 'Arguments' for details and inputs.\cr
+#' [runGdal()] uses numerous **MODIS** functions under the hood, see the linked 
+#' functions in Arguments for details and inputs.
 #' 
-#' If \code{extent} is a \code{Raster*} object, the output has exactly the same 
-#' extent, pixel size, and projection.\cr
-#' If \code{extent} is a \strong{sp} or \strong{sf} object, the 
-#' output has exactly the same extent and projection except for point geometries 
-#' with \emph{length = 1} (ie. a single point) where only the projection is 
-#' inherited.\cr
-#' If \code{tileH} and \code{tileV} are used (instead of \code{extent}) to 
-#' define the area of interest, and \code{outProj} and \code{pixelSize} are 
-#' \code{'asIn'}, the result is only converted from multilayer-HDF to 
-#' \code{dataFormat}, default "GeoTiff" (\code{\link{MODISoptions}}).\cr
+#' If 'extent' is a `Raster*` object, the output has exactly the same extent, 
+#' pixel size, and projection.
+#' If 'extent' is a **sp** or **sf** object, the output has exactly the same 
+#' extent and projection except for point geometries with length 1 (i.e. a 
+#' single point) where only the projection is inherited.
+#' If 'tileH' and 'tileV' are used (instead of 'extent') to define the area of 
+#' interest, and 'outProj' and 'pixelSize' are `"asIn"`, the result is only 
+#' converted from multi-layer HDF to 'dataFormat', default `"GTiff"`.
 #' 
 #' @author 
 #' Matteo Mattiuzzi, Florian Detsch
 #' 
 #' @seealso 
-#' \code{\link{getHdf}}, \code{\link{runMrt}}.
+#' [getHdf()], [runMrt()].
 #' 
 #' @examples 
 #' \dontrun{
@@ -203,17 +199,68 @@ runGdal <- function(product, collection=NULL,
         ftpdirs      <- list()
         
         server = product@SOURCE[[z]]
-        if (length(server) > 1) {
-          server = server[which(server == opts$MODISserverOrder[1])]
-        } 
-          
-        ftpdirs[[1]] <- as.Date(getStruc(product = strsplit(todo[u], "\\.")[[1]][1],
-                                         collection = strsplit(todo[u], "\\.")[[1]][2],
-                                         begin = tLimits$begin, end = tLimits$end,
-                                         server = server)$dates)
         
-        prodname <- strsplit(todo[u],"\\.")[[1]][1] 
-        coll     <- strsplit(todo[u],"\\.")[[1]][2]
+        jnk = strsplit(todo[u],"\\.")[[1]]
+        prodname = jnk[1] 
+        coll     = jnk[2]
+        
+        # cycle through available servers
+        idx = stats::na.omit(
+          match(
+            opts$MODISserverOrder
+            , server
+          )
+        )
+        
+        struc = try(
+          log("e")
+          , silent = TRUE
+        )
+        
+        n = 1L
+        for (i in server[idx]) {
+          jnk = utils::capture.output(
+            struc <- try(
+              getStruc(
+                product = prodname
+                , collection = coll
+                , begin = tLimits$begin
+                , end = tLimits$end
+                , server = i
+              )
+              , silent = TRUE
+            )
+          )
+          
+          if (!inherits(struc, "try-error")) {
+            opts$MODISserverOrder = server[idx][n:length(idx)]
+            break
+          }
+          
+          n = n + 1L
+        }
+        
+        if (inherits(struc, "try-error")) {
+          stop(
+            sprintf(
+              paste0(
+                "'%s.%s' is not available on %s or the server is currently not "
+                , "reachable. If applicable, try another server or collection."
+              )
+              , prodname
+              , coll
+              , paste(
+                opts$MODISserverOrder
+                , collapse = ", "
+              )
+            )
+            , call. = FALSE
+          )
+        }
+        
+        ftpdirs[[1]] = as.Date(
+          struc$dates
+        )
         
         avDates <- ftpdirs[[1]]
         avDates <- avDates[avDates!=FALSE]
@@ -248,15 +295,34 @@ runGdal <- function(product, collection=NULL,
             {
               SDS = lapply(
                 files
-                , function(y) {
-                  getSds(
-                    HdfName = y
-                    , SDSstring = SDSstring
-                  )
-                }
+                , getSds
+                , SDSstring = SDSstring
               )
 
               NAS <- getNa(SDS[[1]]$SDS4gdal)
+              
+              if (!is.null(maskValue)) {
+                if ((l1 <- length(maskValue)) == 1L & (l2 <- length(NAS)) > 1L) {
+                  maskValue = rep(
+                    maskValue
+                    , l2
+                  )
+                }
+                
+                if (!l1 %in% c(1L, l2)) {
+                  stop(
+                    sprintf(
+                      paste(
+                        "'maskValue' length needs to be 1 or match 'SDSstring'"
+                        , "(i.e. %s), got %s."
+                      )
+                      , l2
+                      , l1
+                    )
+                    , call. = FALSE
+                  )
+                }
+              }
 
               ## loop over sds
               ofiles <- character(length(SDS[[1]]$SDSnames))
@@ -275,7 +341,11 @@ runGdal <- function(product, collection=NULL,
                 gdalSDS <- sapply(SDS,function(x){x$SDS4gdal[i]}) # get names of layer 'o' of all files (SDS)
                 
                 naID <- which(SDS[[1]]$SDSnames[i] == names(NAS))
-                nodataValue = srcnodata = dstnodata = if (length(naID) > 0) NAS[[naID]]
+                srcnodata = if (!is.null(maskValue)) {
+                  maskValue[i]
+                } else if (length(naID) > 0) {
+                  NAS[[naID]]
+                }
 
                 if (!file.exists(ofile) || overwrite) {
                   
@@ -284,10 +354,10 @@ runGdal <- function(product, collection=NULL,
                   }
                   
                   ## create first set of gdal options required by subsequent step
-                  lst = list(dataFormat, co, rt, srcnodata, dstnodata)
+                  lst = list(dataFormat, co, rt, srcnodata)
                   names(lst) = paste0(
                     "-"
-                    , c("of", "co", "r", "srcnodata", "dstnodata")
+                    , c("of", "co", "r", "srcnodata")
                   )
                   lst = Filter(Negate(is.null), lst)
                   
@@ -295,6 +365,8 @@ runGdal <- function(product, collection=NULL,
                   for (j in seq(lst)) {
                     params = c(params, names(lst)[j], lst[[j]])
                   }
+                  
+                  qt = !is.null(opts$quiet) && opts$quiet
                   
                   ## if required, adjust pixel size and/or target extent
                   if (is.null(tr) | (!is.null(extent@target) & t_srs == s_srs)) {
@@ -307,9 +379,11 @@ runGdal <- function(product, collection=NULL,
                       , options = c(
                         params
                         , "-overwrite"
-                        , "-multi"
+                        , if (qt) {
+                          "-multi"
+                        }
                       )
-                      , quiet = !is.null(opts$quiet) && opts$quiet
+                      , quiet = qt
                     )
                     
                     # if '-ts' is missing, convert 'asIn' to actual pixel size
@@ -333,69 +407,6 @@ runGdal <- function(product, collection=NULL,
                     rm(tmp)
                   }
                   
-                  
-                  # ### 'maskValue' ----
-                  # 
-                  # ## dummy file
-                  # dmy = tempfile("val_repl", tmpdir = normalizePath(raster::tmpDir()), fileext = xtn)
-                  # 
-                  # if (!is.null(maskValue)) {
-                  #   
-                  #   # check numeric
-                  #   if (is.character(maskValue)) {
-                  #     maskValue = as.numeric(maskValue)
-                  #   } else if (!is.numeric(maskValue)) {
-                  #     stop("'maskValue' needs to be numeric.")
-                  #   }
-                  #   
-                  #   # if required, remove No Data Value from 'maskValue'
-                  #   if (any(maskValue == nodataValue)) {
-                  #     maskValue = maskValue[maskValue != nodataValue]
-                  #   }
-                  #   
-                  #   ifile <- paste0(gdalSDS,collapse='" "')
-                  #
-                  #   # if No Data Value is not already defined 
-                  #   if (is.null(srcnodata)) {
-                  #     nodataValue = maskValue[1]
-                  #     
-                  #     if (length(maskValue) > 1) {
-                  #       
-                  #       for (w in 2:length(maskValue)) {
-                  #         shell(paste(rpl
-                  #                     , "-innd", maskValue[w]
-                  #                     , "-outnd", nodataValue
-                  #                     , of
-                  #                     , ifelse(w == 2, ifile, ofile)
-                  #                     , dmy))
-                  #         
-                  #         jnk = file.copy(dmy, ofile, overwrite = TRUE)
-                  #       }
-                  #     }
-                  #     
-                  #     srcnodata <- paste0(" -srcnodata ", nodataValue)
-                  #     dstnodata <- paste0(" -dstnodata ", nodataValue)
-                  #     
-                  #   # if No Data Value is already defined  
-                  #   } else {
-                  #     
-                  #     for (w in 1:length(maskValue)) {
-                  #       shell(paste(rpl
-                  #                   , "-innd", maskValue[w]
-                  #                   , "-outnd", nodataValue
-                  #                   , of
-                  #                   , ifelse(w == 1, ifile, ofile)
-                  #                   , dmy))
-                  #       
-                  #       jnk = file.copy(dmy, ofile, overwrite = TRUE)
-                  #     }
-                  #   }
-                  #   
-                  #   masked = file.exists(dmy)
-                  # } else {
-                  #   masked = FALSE
-                  # }
-                  
                   ## extract layers
                   lst = c(lst, list("-t_srs" = if (t_srs != s_srs) t_srs, "-te" = te, "-tr" = tr))
                   lst = Filter(Negate(is.null), lst)
@@ -412,9 +423,11 @@ runGdal <- function(product, collection=NULL,
                     , options = c(
                       params
                       , "-overwrite"
-                      , "-multi"
+                      , if (qt) {
+                        "-multi"
+                      }
                     )
-                    , quiet = !is.null(opts$quiet) && opts$quiet
+                    , quiet = qt
                   )
                   
                   # ## if required, remove temporary file

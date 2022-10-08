@@ -2,25 +2,27 @@
 #' 
 #' @description 
 #' This function returns MODIS QA information for a specific product. It gets 
-#' the information from an internal database and not all products are available.   
+#' the information from an internal database and not all products are available.
 #' 
-#' @param product \code{character}, see \code{\link{getProduct}}.
-#' @param what \code{character}. Parameter name, e.g. 'VI Quality' for all MOD13
-#' products (see \href{https://lpdaac.usgs.gov/documents/103/MOD13_User_Guide_V6.pdf}{MODIS Vegetation Index User's Guide}, 
-#' Table 5, column 'Parameter Name').
-#' @param warn \code{logical}, whether or not to throw warning messages.
+#' @param product `character`, see [getProduct()].
+#' @param what `character`. Parameter name, e.g. `"VI Quality"` for all MOD13
+#'   products (see [MODIS Vegetation Index User's Guide](https://lpdaac.usgs.gov/documents/103/MOD13_User_Guide_V6.pdf), 
+#'   Table 5, column "Parameter Name").
+#' @param warn `logical`, whether or not to throw warning messages.
 #' 
 #' @return 
-#' If \code{what = "all"} a \code{data.frame}, else a \code{list}.
+#' If `what = "all"` (default) a `data.frame`, else a `list`.
 #' 
 #' @author 
 #' Matteo Mattiuzzi
 #' 
-#' @examples 
+#' @examples
+#' \dontrun{
 #' detectBitInfo("MOD13Q1")
 #' detectBitInfo("MOD13Q1", "VI usefulness")
 #' 
 #' detectBitInfo("MYD17A2")
+#' }
 #' 
 #' @export detectBitInfo
 #' @name detectBitInfo
